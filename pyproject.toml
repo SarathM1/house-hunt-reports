@@ -1,0 +1,11 @@
+[project]
+name = "house-hunt"
+version = "0.1.0"
+description = "AI-driven house hunting pipeline for Bangalore rentals near Prestige Tech Park"
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "pydantic>=2.0",
+    "python-dotenv",
+    "anthropic",
+]
