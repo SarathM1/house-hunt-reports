@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import anthropic
@@ -224,6 +225,48 @@ def run_comparative_ranking(scored: list[dict]) -> ComparativeResult | None:
         return parse_comparative_result(response.content[0].text.strip())
 
 
+def normalize_building_name(name: str) -> str:
+    name = re.sub(r"[^\w\s]", " ", name.lower())
+    return " ".join(name.split())
+
+
+def find_dupe_groups(scored: list[dict]) -> list[list[int]]:
+    named = []
+    for i, entry in enumerate(scored):
+        bname = entry.get("summary", {}).get("building_name")
+        if bname:
+            named.append((i, normalize_building_name(bname)))
+
+    groups = []
+    used = set()
+    for i, (idx_a, name_a) in enumerate(named):
+        if idx_a in used:
+            continue
+        group = [idx_a]
+        for j in range(i + 1, len(named)):
+            idx_b, name_b = named[j]
+            if idx_b in used:
+                continue
+            if name_a == name_b or name_a in name_b or name_b in name_a:
+                group.append(idx_b)
+                used.add(idx_b)
+        if len(group) > 1:
+            groups.append(group)
+            used.add(idx_a)
+    return groups
+
+
+def mark_duplicates(scored: list[dict]) -> list[dict]:
+    groups = find_dupe_groups(scored)
+    for group in groups:
+        best_idx = max(group, key=lambda i: scored[i].get("final_score", 0))
+        best_pid = scored[best_idx]["summary"]["property_id"]
+        for idx in group:
+            if idx != best_idx:
+                scored[idx]["duplicate_of"] = best_pid
+    return scored
+
+
 def run_score(ctx: RunContext) -> Path:
     config = ctx.config
     filtered_path = ctx.path("filtered.json")
@@ -303,5 +346,8 @@ def run_score(ctx: RunContext) -> Path:
 
         comp_path = ctx.path("comparative.json")
         comp_path.write_text(json.dumps(comparative.model_dump(), indent=2))
+
+    scored = mark_duplicates(scored)
+    out_path.write_text(json.dumps(scored, indent=2))
 
     return out_path

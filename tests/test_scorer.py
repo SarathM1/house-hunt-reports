@@ -123,3 +123,42 @@ def test_parse_comparative_result_invalid():
     import pytest
     with pytest.raises(ValueError):
         parse_comparative_result("not json")
+
+
+def test_normalize_building_name():
+    from src.scorer import normalize_building_name
+    assert normalize_building_name("SLS Signature") == "sls signature"
+    assert normalize_building_name("  SLS  Signature  ") == "sls signature"
+    assert normalize_building_name("SLS-Signature (Phase 2)") == "sls signature phase 2"
+
+
+def test_find_dupe_groups():
+    from src.scorer import find_dupe_groups
+    scored = [
+        {"summary": {"property_id": "a1", "building_name": "SLS Signature"}, "final_score": 80},
+        {"summary": {"property_id": "a2", "building_name": "SLS Signature"}, "final_score": 75},
+        {"summary": {"property_id": "b1", "building_name": "Brigade Lakefront"}, "final_score": 70},
+    ]
+    groups = find_dupe_groups(scored)
+    assert len(groups) == 1
+    assert set(groups[0]) == {0, 1}
+
+
+def test_find_dupe_groups_contains_match():
+    from src.scorer import find_dupe_groups
+    scored = [
+        {"summary": {"property_id": "a1", "building_name": "SLS Signature Tower A"}, "final_score": 80},
+        {"summary": {"property_id": "a2", "building_name": "SLS Signature"}, "final_score": 75},
+    ]
+    groups = find_dupe_groups(scored)
+    assert len(groups) == 1
+
+
+def test_find_dupe_groups_no_building_name():
+    from src.scorer import find_dupe_groups
+    scored = [
+        {"summary": {"property_id": "a1", "building_name": None}, "final_score": 80},
+        {"summary": {"property_id": "a2", "building_name": None}, "final_score": 75},
+    ]
+    groups = find_dupe_groups(scored)
+    assert len(groups) == 0
