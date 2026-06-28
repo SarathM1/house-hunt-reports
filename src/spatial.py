@@ -81,34 +81,39 @@ def compute_peace_score(orr_distance_m: float, locality: str) -> float:
     return min(100, base + bonus)
 
 
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
 def run_filter(ctx: RunContext) -> Path:
     config = ctx.config
     raw_path = ctx.path("raw.json")
     raw_data = json.loads(raw_path.read_text())
     passed = []
 
+    _log(f"=== Spatial filter: {len(raw_data)} listings ===")
     for i, entry in enumerate(raw_data):
         summary = entry["summary"]
         title = summary["title"][:50]
-        print(f"[{i + 1}/{len(raw_data)}] Filtering: {title}...")
+        _log(f"[{i + 1}/{len(raw_data)}] {title}...")
 
         coords = geocode_address(summary["address"] or title, summary["locality"])
         if not coords:
-            print("  Skipped: geocoding failed")
+            _log("  Skipped: geocoding failed")
             continue
 
         lat, lon = coords
         walk = get_walk_duration(lat, lon, config.ptp_coords)
         if walk is None:
-            print("  Skipped: walk duration unavailable")
+            _log("  Skipped: walk duration unavailable")
             continue
         if walk > config.max_walk_minutes:
-            print(f"  Skipped: {walk:.1f}min walk (max {config.max_walk_minutes})")
+            _log(f"  Skipped: {walk:.1f}min walk (max {config.max_walk_minutes})")
             continue
 
         orr_dist = min_orr_distance(lat, lon)
         if orr_dist < config.min_orr_distance_m:
-            print(f"  Skipped: {orr_dist:.0f}m from ORR (min {config.min_orr_distance_m})")
+            _log(f"  Skipped: {orr_dist:.0f}m from ORR (min {config.min_orr_distance_m})")
             continue
 
         peace = compute_peace_score(orr_dist, summary["locality"])
@@ -120,9 +125,16 @@ def run_filter(ctx: RunContext) -> Path:
             "orr_distance_m": round(orr_dist, 0),
             "peace_score": round(peace, 1),
         })
-        print(f"  PASSED: {walk:.1f}min, {orr_dist:.0f}m ORR, peace={peace:.0f}")
+        _log(f"  ✓ PASSED: {walk:.1f}min, {orr_dist:.0f}m ORR, peace={peace:.0f}")
+
+    _log(f"\n{len(passed)}/{len(raw_data)} passed spatial filter")
+
+    # Phase 2: scrape detail pages for survivors only
+    if passed:
+        from .scraper import run_scrape_details
+        passed = run_scrape_details(ctx, passed)
 
     out_path = ctx.path("filtered.json")
     out_path.write_text(json.dumps(passed, indent=2))
-    print(f"Saved {len(passed)}/{len(raw_data)} listings to {out_path}")
+    _log(f"Saved {len(passed)} listings to {out_path}")
     return out_path

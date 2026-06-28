@@ -1,6 +1,6 @@
+import asyncio
 import json
 import re
-import time
 from pathlib import Path
 
 import httpx
@@ -11,6 +11,7 @@ from .models import ListingDetail, ListingSummary
 
 FIRECRAWL_URL = "https://api.firecrawl.dev/v1/scrape"
 SEO_URL_TEMPLATE = "https://www.nobroker.in/2bhk-flats-for-rent-in-{locality}_bangalore"
+MAX_CONCURRENT = 4
 
 
 def _firecrawl_headers(api_key: str) -> dict:
@@ -19,6 +20,59 @@ def _firecrawl_headers(api_key: str) -> dict:
         "Content-Type": "application/json",
     }
 
+
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+async def _scrape_url(client: httpx.AsyncClient, url: str, api_key: str) -> str:
+    resp = await client.post(
+        FIRECRAWL_URL,
+        headers=_firecrawl_headers(api_key),
+        json={"url": url, "formats": ["markdown"], "waitFor": 5000},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("success"):
+        raise RuntimeError(f"Firecrawl failed for {url}: {data}")
+    return data["data"]["markdown"]
+
+
+async def _scrape_seo_pages(localities: list[str], api_key: str) -> dict[str, str]:
+    results = {}
+    sem = asyncio.Semaphore(MAX_CONCURRENT)
+    async with httpx.AsyncClient() as client:
+        async def fetch(locality: str) -> None:
+            async with sem:
+                url = SEO_URL_TEMPLATE.format(locality=locality)
+                _log(f"  Fetching {locality}...")
+                md = await _scrape_url(client, url, api_key)
+                results[locality] = md
+                _log(f"  ✓ {locality} done ({len(md)} chars)")
+        await asyncio.gather(*(fetch(loc) for loc in localities))
+    return results
+
+
+async def _scrape_detail_pages(urls: list[tuple[str, str]], api_key: str) -> dict[str, str]:
+    """Scrape detail pages in parallel. Returns {property_id: markdown}."""
+    results = {}
+    sem = asyncio.Semaphore(MAX_CONCURRENT)
+    async with httpx.AsyncClient() as client:
+        async def fetch(prop_id: str, url: str, idx: int, total: int) -> None:
+            async with sem:
+                _log(f"  [{idx+1}/{total}] Detail: {prop_id}...")
+                try:
+                    md = await _scrape_url(client, url, api_key)
+                    results[prop_id] = md
+                    _log(f"  ✓ {prop_id} done")
+                except Exception as e:
+                    _log(f"  ✗ {prop_id} failed: {e}")
+        await asyncio.gather(*(fetch(pid, url, i, len(urls)) for i, (pid, url) in enumerate(urls)))
+    return results
+
+
+# --- sync wrappers for external use ---
 
 def scrape_seo_page(locality: str, api_key: str = "") -> str:
     api_key = api_key or FIRECRAWL_API_KEY
@@ -35,6 +89,23 @@ def scrape_seo_page(locality: str, api_key: str = "") -> str:
         raise RuntimeError(f"Firecrawl failed for {url}: {data}")
     return data["data"]["markdown"]
 
+
+def scrape_detail_page(url: str, api_key: str = "") -> str:
+    api_key = api_key or FIRECRAWL_API_KEY
+    resp = httpx.post(
+        FIRECRAWL_URL,
+        headers=_firecrawl_headers(api_key),
+        json={"url": url, "formats": ["markdown"], "waitFor": 5000},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("success"):
+        raise RuntimeError(f"Firecrawl failed for {url}: {data}")
+    return data["data"]["markdown"]
+
+
+# --- parsing ---
 
 def _extract_property_id(url: str) -> str:
     parts = url.rstrip("/").split("/")
@@ -101,21 +172,6 @@ def parse_listings_from_markdown(md: str, source_locality: str) -> list[ListingS
     return listings
 
 
-def scrape_detail_page(url: str, api_key: str = "") -> str:
-    api_key = api_key or FIRECRAWL_API_KEY
-    resp = httpx.post(
-        FIRECRAWL_URL,
-        headers=_firecrawl_headers(api_key),
-        json={"url": url, "formats": ["markdown"], "waitFor": 5000},
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("success"):
-        raise RuntimeError(f"Firecrawl failed for {url}: {data}")
-    return data["data"]["markdown"]
-
-
 def _extract_table_value(md: str, key: str) -> str | None:
     pattern = rf"\|\s*{re.escape(key)}\s*\|\s*(.+?)\s*\|"
     match = re.search(pattern, md, re.IGNORECASE)
@@ -161,43 +217,58 @@ def parse_detail_from_markdown(md: str, property_id: str) -> ListingDetail:
     )
 
 
+# --- pipeline entry points ---
+
 def run_scrape(ctx: RunContext) -> Path:
+    """Phase 1 only: scrape SEO listing pages in parallel. No detail pages."""
     config = ctx.config
+    api_key = FIRECRAWL_API_KEY
     dedup = Dedup()
+
+    _log("=== Phase 1: SEO listing pages (parallel) ===")
+    seo_results = asyncio.run(_scrape_seo_pages(config.target_localities, api_key))
+
     all_summaries: list[ListingSummary] = []
     seen_ids: set[str] = set()
+    for locality, md in seo_results.items():
+        listings = parse_listings_from_markdown(md, locality)
+        for ls in listings:
+            if ls.property_id in seen_ids or dedup.is_seen(ls.property_id):
+                continue
+            if ls.rent > config.max_rent:
+                continue
+            seen_ids.add(ls.property_id)
+            all_summaries.append(ls)
+        _log(f"  {locality}: {len(listings)} parsed, {len(seen_ids)} unique total")
 
-    for locality in config.target_localities:
-        print(f"Scraping {locality}...")
-        try:
-            md = scrape_seo_page(locality)
-            listings = parse_listings_from_markdown(md, locality)
-            for ls in listings:
-                if ls.property_id in seen_ids or dedup.is_seen(ls.property_id):
-                    continue
-                if ls.rent > config.max_rent:
-                    continue
-                seen_ids.add(ls.property_id)
-                all_summaries.append(ls)
-            print(f"  {len(listings)} found, {len(seen_ids)} unique passing filters")
-            time.sleep(2)
-        except Exception as e:
-            print(f"  Error: {e}")
-
-    results = []
-    for i, summary in enumerate(all_summaries):
-        print(f"[{i + 1}/{len(all_summaries)}] Detail: {summary.title[:50]}...")
-        try:
-            md = scrape_detail_page(summary.detail_url)
-            detail = parse_detail_from_markdown(md, summary.property_id)
-            dedup.mark_seen(summary.property_id)
-            results.append({"summary": summary.model_dump(), "detail": detail.model_dump()})
-            time.sleep(2)
-        except Exception as e:
-            print(f"  Detail scrape failed: {e}")
-            results.append({"summary": summary.model_dump(), "detail": None})
-
+    results = [{"summary": s.model_dump(), "detail": None} for s in all_summaries]
     out_path = ctx.path("raw.json")
     out_path.write_text(json.dumps(results, indent=2))
-    print(f"Saved {len(results)} listings to {out_path}")
+    _log(f"Saved {len(results)} listings to {out_path}")
     return out_path
+
+
+def run_scrape_details(ctx: RunContext, entries: list[dict]) -> list[dict]:
+    """Phase 2: scrape detail pages for given entries in parallel. Returns updated entries."""
+    api_key = FIRECRAWL_API_KEY
+    dedup = Dedup()
+
+    urls = [(e["summary"]["property_id"], e["summary"]["detail_url"]) for e in entries if e.get("detail") is None]
+    if not urls:
+        _log("No detail pages to scrape.")
+        return entries
+
+    _log(f"=== Phase 2: Detail pages ({len(urls)} listings, parallel) ===")
+    detail_mds = asyncio.run(_scrape_detail_pages(urls, api_key))
+
+    updated = []
+    for entry in entries:
+        pid = entry["summary"]["property_id"]
+        if pid in detail_mds:
+            detail = parse_detail_from_markdown(detail_mds[pid], pid)
+            dedup.mark_seen(pid)
+            entry["detail"] = detail.model_dump()
+        updated.append(entry)
+
+    _log(f"  Got details for {len(detail_mds)}/{len(urls)} listings")
+    return updated

@@ -122,6 +122,12 @@ def run_score(ctx: RunContext) -> Path:
             w = config.score_weights
             final = w["peace"] * peace + w["llm"] * llm
 
+            if not detail or not detail.get("property_id"):
+                base = {"property_id": summary["property_id"], "furnishing": "", "floor": "", "description": ""}
+                if detail:
+                    base.update({k: v for k, v in detail.items() if v is not None})
+                detail = base
+
             item = ScoredListing(
                 summary=summary,
                 detail=detail,
