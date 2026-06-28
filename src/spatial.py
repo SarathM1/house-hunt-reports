@@ -131,10 +131,10 @@ def run_filter(ctx: RunContext) -> Path:
 
     _log(f"\n{len(passed)}/{len(raw_data)} passed spatial filter")
 
-    # Phase 2: scrape detail pages for survivors only
+    # Phase 2: scrape detail pages for survivors via Playwright (renders SPA)
     if passed:
-        from .scraper import run_scrape_details
-        passed = run_scrape_details(ctx, passed)
+        from .detail_scraper import scrape_details_playwright
+        passed = scrape_details_playwright(passed)
 
     out_path = ctx.path("filtered.json")
     out_path.write_text(json.dumps(passed, indent=2))
