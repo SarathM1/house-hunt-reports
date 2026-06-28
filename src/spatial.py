@@ -160,7 +160,7 @@ def run_filter(ctx: RunContext) -> Path:
     # Phase 2: scrape detail pages for survivors via Playwright (renders SPA)
     if passed:
         from .detail_scraper import scrape_details_playwright
-        passed = scrape_details_playwright(passed)
+        passed = scrape_details_playwright(passed, with_images=True)
 
     out_path = ctx.path("filtered.json")
     out_path.write_text(json.dumps(passed, indent=2))

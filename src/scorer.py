@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -7,6 +8,8 @@ import anthropic
 from .config import RunContext
 from .db import Dedup
 from .models import ComparativeResult, CriteriaScore, RankingEntry, ScoredListing
+
+MAX_CONCURRENT_SCORES = 5
 
 STRUCTURED_JUDGE_TEMPLATE = """You are evaluating a rental apartment listing for a hybrid worker near Prestige Tech Park, Bangalore.
 The tenant works remotely ~22 days/month from home, commutes to office only ~8 days/month.
@@ -119,6 +122,47 @@ def parse_structured_score(text: str, llm_weights: dict[str, int]) -> dict:
         raise ValueError("elevator_pitch must be a non-empty string")
 
     return data
+
+
+async def score_listing_async(
+    client: anthropic.AsyncAnthropic,
+    sem: asyncio.Semaphore,
+    summary: dict,
+    detail: dict,
+    spatial: dict,
+    llm_weights: dict[str, int],
+    data_completeness: float,
+    idx: int,
+    total: int,
+) -> dict:
+    async with sem:
+        title = summary.get("title", "?")[:50]
+        print(f"[{idx + 1}/{total}] Scoring: {title}...")
+        prompt = build_structured_judge_prompt(
+            summary=summary,
+            detail=detail or {},
+            walk_minutes=spatial["walk_minutes"],
+            orr_distance_m=spatial["orr_distance_m"],
+            data_completeness=data_completeness,
+            llm_weights=llm_weights,
+        )
+        response = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+        try:
+            return parse_structured_score(text, llm_weights)
+        except ValueError as e:
+            retry_prompt = f"{prompt}\n\nYour previous response had an error: {e}\nPlease fix and respond with valid JSON only."
+            response = await client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": retry_prompt}],
+            )
+            text = response.content[0].text.strip()
+            return parse_structured_score(text, llm_weights)
 
 
 def score_listing(
@@ -267,26 +311,31 @@ def mark_duplicates(scored: list[dict]) -> list[dict]:
     return scored
 
 
-def run_score(ctx: RunContext) -> Path:
+async def _run_score_async(ctx: RunContext) -> Path:
     config = ctx.config
     filtered_path = ctx.path("filtered.json")
     entries = json.loads(filtered_path.read_text())
     dedup = Dedup()
-    scored = []
+    total = len(entries)
 
-    for i, entry in enumerate(entries):
+    print(f"=== Scoring {total} listings (max {MAX_CONCURRENT_SCORES} concurrent) ===")
+    client = anthropic.AsyncAnthropic()
+    sem = asyncio.Semaphore(MAX_CONCURRENT_SCORES)
+
+    async def _score_one(i: int, entry: dict) -> dict | None:
         summary = entry["summary"]
         detail = entry.get("detail") or {}
-        title = summary["title"][:50]
-        print(f"[{i + 1}/{len(entries)}] Scoring: {title}...")
-
         try:
-            result = score_listing(
+            result = await score_listing_async(
+                client=client,
+                sem=sem,
                 summary=summary,
                 detail=detail,
                 spatial={"walk_minutes": entry["walk_minutes"], "orr_distance_m": entry["orr_distance_m"]},
                 llm_weights=config.llm_weights,
                 data_completeness=entry.get("data_completeness", 0.5),
+                idx=i,
+                total=total,
             )
 
             llm = sum(cs["score"] for cs in result["criteria_scores"].values())
@@ -321,18 +370,22 @@ def run_score(ctx: RunContext) -> Path:
                 data_completeness=entry.get("data_completeness", 0.5),
                 peace_breakdown=entry.get("peace_breakdown"),
             )
-            scored.append(item.model_dump())
             dedup.update_score(summary["property_id"], final, result.get("disqualified", False))
             status = "DISQ" if item.disqualified else "OK"
             print(f"  [{status}] Score: {final:.1f} (LLM:{llm} Peace:{peace:.0f})")
+            return item.model_dump()
         except Exception as e:
-            print(f"  Error: {e}")
+            print(f"  Error scoring {summary.get('title', '?')[:40]}: {e}")
+            return None
+
+    results = await asyncio.gather(*[_score_one(i, entry) for i, entry in enumerate(entries)])
+    scored = [r for r in results if r is not None]
 
     out_path = ctx.path("scored.json")
     out_path.write_text(json.dumps(scored, indent=2))
     print(f"Saved {len(scored)} scored listings to {out_path}")
 
-    # Pass 2: Comparative ranking
+    # Pass 2: Comparative ranking (single call, not parallelized)
     comparative = run_comparative_ranking(scored)
     if comparative:
         for ranking in comparative.rankings:
@@ -351,3 +404,7 @@ def run_score(ctx: RunContext) -> Path:
     out_path.write_text(json.dumps(scored, indent=2))
 
     return out_path
+
+
+def run_score(ctx: RunContext) -> Path:
+    return asyncio.run(_run_score_async(ctx))

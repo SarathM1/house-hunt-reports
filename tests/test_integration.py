@@ -1,6 +1,7 @@
+import asyncio
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from tests.test_scraper import SAMPLE_SEO_MARKDOWN, SAMPLE_DETAIL_MARKDOWN
 
@@ -59,10 +60,11 @@ def test_full_pipeline_mocked(tmp_path):
     # Mock LLM scorer
     mock_response = MagicMock()
     mock_response.content = [MagicMock(text='{"criteria_scores": {"power_backup": {"score": 18, "max": 20, "confidence": "high", "evidence": "Full gen"}, "noise": {"score": 14, "max": 20, "confidence": "medium", "evidence": "3rd floor"}, "internet": {"score": 10, "max": 15, "confidence": "low", "evidence": "No mention"}, "light_ventilation": {"score": 8, "max": 10, "confidence": "medium", "evidence": "East facing"}, "water": {"score": 7, "max": 10, "confidence": "high", "evidence": "Corp+bore"}, "maintenance": {"score": 8, "max": 10, "confidence": "high", "evidence": "Gated"}, "wfh_livability": {"score": 7, "max": 10, "confidence": "medium", "evidence": "Semi furnished"}, "value": {"score": 4, "max": 5, "confidence": "high", "evidence": "28/sqft"}}, "pros": ["Full generator", "Gated community"], "cons": ["No fiber mentioned"], "elevator_pitch": "Quiet gated flat with full power backup", "disqualified": false, "disqualify_reason": null}')]
-    with patch("src.scorer.anthropic.Anthropic") as MockClient, \
+    async_mock_response = AsyncMock(return_value=mock_response)
+    with patch("src.scorer.anthropic.AsyncAnthropic") as MockClient, \
          patch("src.scorer.Dedup") as MockDedup2, \
          patch("src.scorer.run_comparative_ranking", return_value=None):
-        MockClient.return_value.messages.create.return_value = mock_response
+        MockClient.return_value.messages.create = async_mock_response
         MockDedup2.return_value.update_score.return_value = None
         from src.scorer import run_score
         run_score(ctx)

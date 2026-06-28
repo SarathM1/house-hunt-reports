@@ -11,3 +11,4 @@ data/runs/
 .pytest_cache/
 .serena/
 *.png
+reports/test*/

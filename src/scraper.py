@@ -152,7 +152,7 @@ def parse_listings_from_markdown(md: str, source_locality: str) -> list[ListingS
             date_match = re.search(r"(\d{4}-\d{2}-\d{2})", block)
             available_date = date_match.group(1) if date_match else None
 
-            image_urls = re.findall(r"!\[.*?\]\((https://[^\)]+)\)", block)
+            image_urls = [u for u in re.findall(r"!\[.*?\]\((https://[^\)]+)\)", block) if "images.nobroker.in" in u]
 
             listings.append(
                 ListingSummary(
