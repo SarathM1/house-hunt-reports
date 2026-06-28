@@ -27,24 +27,21 @@
 
 <div class="top-bar">
   <h1>House Hunt Reports</h1>
-  <div class="subtitle">2 runs</div>
+  <div class="subtitle">{{ runs | length }} run{{ 's' if runs | length != 1 else '' }}</div>
 </div>
 
 <div class="container">
   <div class="runs">
-    
-    <a class="run-card" href="reports/20260628_181138/index.html">
-      <div class="config-name">budget</div>
-      <div class="run-date">Jun 28, 6:11 PM</div>
+    {% for run in runs %}
+    <a class="run-card" href="reports/{{ run.run_id }}/index.html">
+      <div class="config-name">{{ run.config_name }}</div>
+      <div class="run-date">{{ run.date_formatted }}</div>
     </a>
-    
-    <a class="run-card" href="reports/20260628_173924/index.html">
-      <div class="config-name">default</div>
-      <div class="run-date">Jun 28, 5:39 PM</div>
-    </a>
-    
+    {% endfor %}
   </div>
-  
+  {% if not runs %}
+  <div class="empty">No reports yet. Run /hunt to generate one.</div>
+  {% endif %}
 </div>
 
 </body>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>House Hunt Report — 20260628_173924</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; overflow-x: hidden; }
+
+  .top-bar { background: #1a1a2e; color: #fff; padding: 16px 20px; }
+  .top-bar h1 { font-size: 18px; margin-bottom: 4px; }
+  .top-bar .meta { font-size: 12px; color: #aaa; }
+  .top-bar .meta span { color: #4ecdc4; font-weight: 600; }
+
+  .controls { background: #fff; padding: 12px 20px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 99; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .control-group { display: flex; flex-direction: column; gap: 2px; }
+  .control-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
+  .control-group select, .control-group input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: #fff; }
+  .control-group input[type=range] { width: 140px; }
+  .range-val { font-size: 12px; color: #555; font-weight: 500; min-width: 50px; }
+  .toggle { display: flex; gap: 6px; align-items: center; }
+  .toggle input[type=checkbox] { width: 16px; height: 16px; }
+  .toggle label { font-size: 13px; cursor: pointer; }
+  .result-count { font-size: 13px; color: #888; margin-left: auto; padding: 6px 0; }
+
+  .container { max-width: 100%; padding: 16px 20px; }
+
+  .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #ddd; transition: opacity 0.2s; min-width: 0; }
+  .card.qualified { border-left-color: #4ecdc4; }
+  .card.act-now { border-left-color: #ff6b6b; }
+  .card.disqualified { border-left-color: #ccc; opacity: 0.5; }
+  .card.hidden { display: none; }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; min-width: 0; }
+  .card-top h2 { font-size: 15px; flex: 1; line-height: 1.3; min-width: 0; }
+  .card-top h2 a { color: #1a1a2e; text-decoration: none; overflow-wrap: break-word; word-wrap: break-word; }
+  .card-top h2 a:hover { color: #4ecdc4; }
+  .rank { color: #aaa; font-size: 13px; margin-right: 6px; }
+  .score { background: #1a1a2e; color: #fff; padding: 3px 10px; border-radius: 16px; font-size: 13px; font-weight: 600; white-space: nowrap; margin-left: 10px; flex-shrink: 0; }
+  .score.high { background: #ff6b6b; }
+  .score.disq { background: #999; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 6px; vertical-align: middle; }
+  .tag.act { background: #ffe0e0; color: #d32f2f; }
+  .tag.disq { background: #eee; color: #888; }
+
+  .props { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 16px; margin-bottom: 8px; }
+  .prop { font-size: 12px; }
+  .prop .k { color: #999; }
+  .prop .v { font-weight: 500; }
+
+  .images { display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .images img { height: 120px; border-radius: 6px; object-fit: cover; cursor: pointer; flex-shrink: 0; }
+  .images img:hover { opacity: 0.8; }
+  .reasoning { font-size: 12px; color: #666; line-height: 1.4; padding: 8px 10px; background: #f9f9f9; border-radius: 5px; margin-top: 6px; overflow-wrap: break-word; }
+  .disq-reason { color: #d32f2f; font-weight: 500; font-size: 12px; margin-bottom: 6px; }
+  .lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; cursor: pointer; }
+  .lightbox.active { display: flex; }
+  .lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px; }
+
+  .sort-active { background: #4ecdc4 !important; color: #fff !important; border-color: #4ecdc4 !important; }
+
+  @media (max-width: 600px) {
+    .top-bar { padding: 12px 16px; }
+    .top-bar h1 { font-size: 16px; }
+    .controls { padding: 10px 16px; gap: 6px; flex-direction: column; align-items: stretch; }
+    .control-group { width: 100%; }
+    .control-group input[type=range] { flex: 1; width: auto; }
+    .toggle { justify-content: flex-start; }
+    .container { padding: 12px 10px; }
+    .card { padding: 14px; }
+    .card-top { flex-direction: column; gap: 6px; }
+    .score { align-self: flex-start; margin-left: 0; }
+    .props { grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+    .images img { height: 100px; }
+    .reasoning { font-size: 13px; }
+    .result-count { margin-left: 0; }
+    .toggle label { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>House Hunt Report</h1>
+  <div class="meta">
+    Run: <span>20260628_173924</span> &middot;
+    Config: <span>default</span> &middot;
+    Total: <span>4</span>
+  </div>
+</div>
+
+<div class="controls" id="controls">
+  <div class="control-group">
+    <label>Max Rent</label>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="range" id="f-rent" min="5000" max="100000" step="1000" value="100000">
+      <span class="range-val" id="f-rent-val">₹1L</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Max Travel (min)</label>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="range" id="f-travel" min="5" max="120" step="5" value="120">
+      <span class="range-val" id="f-travel-val">120</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Min Area (sqft)</label>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="range" id="f-sqft" min="0" max="2000" step="50" value="0">
+      <span class="range-val" id="f-sqft-val">Any</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Furnishing</label>
+    <select id="f-furn">
+      <option value="all">All</option>
+      <option value="Full">Full</option>
+      <option value="Semi">Semi</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Sort By</label>
+    <select id="f-sort">
+      <option value="score">Score</option>
+      <option value="rent">Rent (low)</option>
+      <option value="travel">Travel (short)</option>
+      <option value="sqft">Area (big)</option>
+      <option value="value">₹/sqft (low)</option>
+    </select>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-power" checked>
+    <label for="f-power">Power backup only</label>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-gated">
+    <label for="f-gated">Gated only</label>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-hide-disq" checked>
+    <label for="f-hide-disq">Hide disqualified</label>
+  </div>
+  <div class="result-count" id="result-count"></div>
+</div>
+
+<div class="container">
+  <div class="cards" id="cards"></div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+  <img id="lightbox-img" src="">
+</div>
+
+<script>
+const DATA = [{"summary": {"property_id": "ff8081815b15c304015b1a8d9f1a6226", "title": "2 BHK Apartment In Sls Serenity Apartments, Kadubeesnahalli for Rent In Kadubeesanahalli", "rent": 52000, "deposit": 200000, "maintenance": null, "sqft": 1356, "address": "[Sls Serenity apartments, Kadubeesnahalli](https://www.nobroker.in/sls-serenity-kodbisanhalli_bangalore-prjt-5ba009ad714b568105762497) SLS Serenity apartments,Opp JP Morgan , Opp Prestige Tech Park and Oracle Tech Hub, Kadubeesanahalli, Bengaluru, Karnataka 560087, India", "locality": "kadubeesanahalli", "building_name": null, "detail_url": "https://www.nobroker.in/property/2-bhk-apartment-for-rent-in-kadubeesanahalli-bangalore-for-rs-52000/ff8081815b15c304015b1a8d9f1a6226/detail", "available_date": "2026-06-30", "image_urls": ["https://assets.nobroker.in/static/img/resale/report_abuse_2.png"]}, "detail": {"property_id": "ff8081815b15c304015b1a8d9f1a6226", "furnishing": "Semi", "floor": "3/4", "power_backup": "Yes", "facing": "West", "bathrooms": 2, "balconies": null, "parking": "5-10 Years", "building_age": "2", "preferred_tenant": "Jul 1, 2026", "water_supply": "Borewell", "gated_security": true, "description": "7.8\n8.4\nPowered By: Smart Recommendation\nThis house is semi furnished with wardrobes. It's recently renovated bathroom, kitchen, wardrobe etc.Its a prime location just opposite JP Morgan ,kadubessnahalli, Opp Oracle and Prestige tech park. It has easy access to market, schools, hospitals, banks and ATM's as well.\nMaintenance charges are included in the rent.\nShow More"}, "lat": 12.9412385, "lon": 77.6967074, "walk_minutes": 16.9, "orr_distance_m": 1049.0, "peace_score": 100, "llm_score": 80, "llm_reasoning": "SLS Serenity: Power backup confirmed (amenities). Semi-furnished, 3rd floor of 4 \u2014 good for light/ventilation. Gated security with housekeeping, lift, sewage treatment. Borewell-only water is a risk (no corporation supply). Opp JP Morgan/PTP \u2014 excellent location, 1km+ from ORR. Broadband likely available. Good value at 52K all-inclusive for 1356sqft.", "final_score": 88.0, "disqualified": false, "disqualify_reason": null}, {"summary": {"property_id": "8aa99a269e58e6f4019e5a683a404a67", "title": "2 BHK Apartment In Saveria Winston Apartment for Rent In Kadubeesanahalli", "rent": 55000, "deposit": 350000, "maintenance": 4875, "sqft": 1250, "address": "", "locality": "kadubeesanahalli", "building_name": null, "detail_url": "https://www.nobroker.in/property/2-bhk-apartment-for-rent-in-kadubeesanahalli-bangalore-for-rs-55000/8aa99a269e58e6f4019e5a683a404a67/detail", "available_date": "2026-06-24", "image_urls": ["https://assets.nobroker.in/static/img/resale/report_abuse_2.png"]}, "detail": {"property_id": "8aa99a269e58e6f4019e5a683a404a67", "furnishing": "Full", "floor": "2/5", "power_backup": "Yes", "facing": "East", "bathrooms": 2, "balconies": null, "parking": "5-10 Years", "building_age": "2", "preferred_tenant": "Immediately", "water_supply": "Both", "gated_security": true, "description": "6\n6.3\nPowered By: Smart Recommendation\nAssets:\n\n1 Broadband connection \n1 LPG connection \n1 Dinning table with 6 chairs, covers & mats,\n1 Sofa set (1 single, 1 double & 1 triple), \n2 beds with 2 mattresses & 4 pillows,\n1 LCD TV, \n1 IFB Microwave,\n1 IFB Washing Machine \n1 double door Refrigerator,\n2 wtw cupboards \n1 mixer grinder \n1 boiler \n1 shoe rack\n1 showcase \n1 HP printer cum scanner, along with printing paper\n1 iron with Iron Stand \n1 setup mandir \n1 table lamp\n1 study table\n1 laptop stand \n1 dunlop mattress \n2 nilkamal (plastic) chairs with Frido butt cushions \n3 center tables \n1 internal geyser \nMultiple Utensils, Containers, etc.\n\nFacilities in & of apartment:\n\n1 SUV/ MUV/ Hatchback parking,\n24 7 security \n24 7 power backup\nLift\nFully operational common gym, party hall, terrace, etc\n\nAttractions next door/ in close proximity:\n\nFruits, coconut, flowers (for puja),\nMalls/ Store, Grocery (Zudio store, sansar departmental store, Vishal Mega Mart),\nCafe (coffee mechanics),\nPickleball/ tennis/ badminton etc. court (11 point club),\npub/ bistro (deck of brews, ironhill, beige), etc.\n\nOffices in the near vicinity:\n\nEmbassy Tech Village, \nPrestige Group,\nPrestige Tech park, \nFlipkart, Myntra, Swiggy, Xiomi, JP Morgan, etc.\nAre you looking for a 2bhk for rent? This spacious property is available for rent in Kadubeesanahalli. It is fully furnished and convenient for companies This East facing home is on the 2nd floor & is over 1250 sqft. You get ample & dedicated parking lot for a car with this home.\n\nWhen you need club house & a gym, all you have to do is step out of the door as the apartment complex has what you are looking for. As this home comes with servant room, house keeping, fire safety, sewage treatment plant & gas pipeline & more such amenities, living here would make life more pleasant. With amenities such as battery back up, intercom facility, security, elevator & Wi-Fi this home offers you a lot of convenience.\n\nIf you are a frequent traveller, then you'll be happy to note that train station is less than 10 minutes from this house.\n\nNew Horizon Gurukul, Art Classes and Little Elly Preschool Panathur are well known educational institutes in town & are very close to this home. Being situated near BEST SERVICES, Apollo Pharmacy and Sri Krishna Sevashrama Trust Hospital ???? ????? ???????? ??????? ????????, emergency care is very easily available at any time.\n\nWith Teez shoe Store and Mango hypermarket nearby, access to all your favourite stores is now a breeze. With Srivinayaka Theatre, Tulsi Theatre & Multiplex close by, you can catch your favourite movies running & never worry about missing a show because of traffic.\nShow More"}, "lat": 12.9350007, "lon": 77.6977649, "walk_minutes": 23.3, "orr_distance_m": 484.0, "peace_score": 82.8, "llm_score": 82, "llm_reasoning": "Saveria Winston: Power backup confirmed. Fully furnished with broadband, LPG, dining setup \u2014 excellent WFH readiness. Floor 2/5 ideal for light and noise insulation. Both corporation + borewell water. Gated security. 484m from ORR is decent buffer. Includes amenities. At 60K total slightly expensive but well-equipped.", "final_score": 82.3, "disqualified": false, "disqualify_reason": null}, {"summary": {"property_id": "8a9f9e8394ee3e0a0194ee4ae716034f", "title": "2 BHK Apartment In Prestige Silver Crest for Rent In Kadubeesanahalli", "rent": 60000, "deposit": 300000, "maintenance": 6000, "sqft": 1260, "address": "", "locality": "kadubeesanahalli", "building_name": null, "detail_url": "https://www.nobroker.in/property/2-bhk-apartment-for-rent-in-kadubeesanahalli-bangalore-for-rs-60000/8a9f9e8394ee3e0a0194ee4ae716034f/detail", "available_date": "2026-07-06", "image_urls": ["https://assets.nobroker.in/static/img/resale/report_abuse_2.png"]}, "detail": {"property_id": "8a9f9e8394ee3e0a0194ee4ae716034f", "furnishing": "Full", "floor": "1/3", "power_backup": null, "facing": "East", "bathrooms": 2, "balconies": null, "parking": "5-10 Years", "building_age": "1", "preferred_tenant": "Jul 7, 2026", "water_supply": "Both", "gated_security": true, "description": "5.7\n8.2\nPowered By: Smart Recommendation\nModular kitchen with a hob, chimney,  and RO water purifier. Both rooms have full size wall fitted wardrobes with lofts and book shelves, study/desk,  dressing table. The living and dining rooms each have false ceilings. It has 2 television cabinet, a shoe cabinet, a Puja cabinet, a crockery unit, breakfast counter .Free electricity (up to ~200 units). Sofa ,center table and one bed with mattress\nThis fully furnished 2bhk is available for rent in Kadubeesanahalli with parking facility for car. Take a look before it's gone. All companies looking for an apartment will find this home attractive at Rs. 60,000. This East facing home is on the 1st floor & is over 1260 sqft.\n\nIf you need amenities such as power back up, intercom facility, security & lift you will be happy to note that this home has this & more. When you need community centre, kids play area, a gym, park & swimming pool for relaxation, all you have to do is step out of the door as the apartment complex has what you are looking for. With premium amenities such as fire security, house keeping, servant quarters, visitor parking, rainwater harvesting & waste treatment plant this home provides you with many added benefits.\n\nIf you are a frequent traveller, then you'll be happy to note that train station is less than 10 minutes from this house.\n\nWith Srivinayaka Theatre, Tulsi Theatre & Multiplex close by, you can catch your favourite movies running & never worry about missing a show because of traffic. If you are looking for gifts, or just want to spoil yourself, Mango hypermarket, Teez shoe Store and Unique hypermarket have a wide variety of things that you can choose from.\n\nAccess to bus stop & pharmacies is very easy & convenient from this house.\n\nWith New Horizon Gurukul, Little Elly Preschool Panathur and Art Classes close to this home, you'll be able to provide your children with many options to choose from. If you are in need of any emergency services or medical assistance, you will be happy to note that BEST SERVICES, SK (Siddhayoga Kendra) Yoga Studio and VIMS Hospital, Marathahali are very close by.\nShow More"}, "lat": 12.9358065, "lon": 77.6892254, "walk_minutes": 14.2, "orr_distance_m": 314.0, "peace_score": 67.1, "llm_score": 0, "llm_reasoning": "Prestige Silver Crest: No power backup listed in amenities. Despite being premium Prestige property with full furnishing, gated security, and both water supplies \u2014 fails the hard power backup requirement. 1st floor of 3, close to ORR (314m). Total cost 66K is highest.", "final_score": 0, "disqualified": true, "disqualify_reason": "No power backup listed"}, {"summary": {"property_id": "ff8081816870ce5901687166c7fd2fd2", "title": "2 BHK Apartment In Sv Brindavanam for Rent In Bellandur", "rent": 57000, "deposit": 200000, "maintenance": 6000, "sqft": 1400, "address": "Nearby:[HAL Alpha Helipad](https://www.nobroker.in/flats-for-rent-near-hal_alpha_helipad_vimanapura_bangalore) [Marathalli branch](https://www.nobroker.in/flats-for-rent-near-marathalli_branch_doddanekkundi_bangalore) [Kundalahalli Gate](https://www.nobroker.in/flats-for-rent-near-kundalhalli_gate_bus_stop_beml_layout_brookefield_bangalore) [Nutritionist Aarti Srivastava](https://www.nobroker.in/flats-for-rent-near-aarti_apartments_bangalore) [Balagere Road Varthur](https://www.nobroker.in/flats-for-rent-near-balagere_road_varthur_bangalore)", "locality": "panathur", "building_name": null, "detail_url": "https://www.nobroker.in/property/2-bhk-apartment-for-rent-in-bellandur-bangalore-for-rs-57000/ff8081816870ce5901687166c7fd2fd2/detail", "available_date": "2026-07-03", "image_urls": ["https://assets.nobroker.in/static/img/resale/report_abuse_2.png"]}, "detail": {"property_id": "ff8081816870ce5901687166c7fd2fd2", "furnishing": "Full", "floor": "4/4", "power_backup": null, "facing": "East", "bathrooms": 2, "balconies": null, "parking": "3-5 Years", "building_age": "2", "preferred_tenant": "Jul 4, 2026", "water_supply": "Both", "gated_security": true, "description": "Two bedrooms with 2 bathrooms available in fully furnished well ventilated 2 BHK for rent  in a gated apartment community fully loaded with amenities including swimming pool, gym, club house, badminton courts, amphitheatre, party hall, indoor games, snooker, badminton, foosball, landscaped garden area, jogging track, housekeeping, power-backup, CCTV cameras. Flat is fully equipped with modular kitchen, wardrobes, lofts, gas burner, chimney, fridge, washing machine, shoerack, book shelves, wall shelves, decorative items, wooden furniture items, mixer grinder, kitchen utensils and items,RO Purifier, Plants,Pooja unit, AC, fans, lights, six seater dining table set, 3+1+1sofa set, tea/coffee table, king size storage bed, king size mattress, queen size bed, queen size mattress, one diwan, geysers in both bathrooms and many more items etc. Apartment has a privately run day-care as well within premises.\n\nExcellent location for people working in Eco World, Eco Space, Vridavan Tech Village (Embassy), Salarpuria, Prestige Tech Park, Aricent, ORR/Bellandur Companies. Nearby schools: Gear Innovative, New Horizon, Vibgyor, Orchids International etc\n\nAll furniture is high quality solid wood and Cane.\n\nContact me for any other questions. Can be given to family or Bachelors\n2bhk apartment flat for rent in Bellandur is now vacant, if you're a companies, this is the place for you. This East facing 1400 sqft. home comes with a convenient parking facility for car. This home is well equipped with 5 wardrobes & also has 2 bathrooms. This home is on the 4th floor & brings in light & air to the home."}, "lat": 12.9380954, "lon": 77.704165, "walk_minutes": 29.1, "orr_distance_m": 1186.0, "peace_score": 80, "llm_score": 0, "llm_reasoning": "SV Brindavanam: No power backup listed in amenities. Fully furnished, 4th of 4 floors (top floor = heat in summer). Both water supplies. 29min walk to PTP is far. Bellandur area. Fails hard power backup requirement.", "final_score": 0, "disqualified": true, "disqualify_reason": "No power backup listed"}];
+const THRESHOLD = 85;
+
+function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function makeCard(e, rank) {
+  const s = e.summary, d = e.detail || {};
+  const isDisq = e.disqualified;
+  const isAct = e.final_score >= THRESHOLD && !isDisq;
+  const cls = isAct ? 'act-now' : (isDisq ? 'disqualified' : 'qualified');
+  const tagHtml = isAct ? '<span class="tag act">Act Now</span>' : (isDisq ? '<span class="tag disq">DQ</span>' : '');
+  const scoreClass = isAct ? 'high' : (isDisq ? 'disq' : '');
+  const totalRent = s.rent + (s.maintenance || 0);
+
+  return `<div class="card ${cls}" data-rent="${totalRent}" data-travel="${e.walk_minutes}" data-sqft="${s.sqft}" data-score="${e.final_score}" data-furn="${d.furnishing || ''}" data-power="${d.power_backup || ''}" data-gated="${d.gated_security}" data-disq="${isDisq}" data-value="${s.sqft > 0 ? (totalRent/s.sqft).toFixed(1) : 999}">
+    <div class="card-top">
+      <h2><span class="rank">#${rank}</span><a href="${s.detail_url}" target="_blank">${esc(s.title)}</a>${tagHtml}</h2>
+      <span class="score ${scoreClass}">${e.final_score}</span>
+    </div>
+    ${isDisq ? `<div class="disq-reason">${e.disqualify_reason}</div>` : ''}
+    <div class="props">
+      <div class="prop"><span class="k">Rent </span><span class="v">₹${totalRent.toLocaleString('en-IN')}</span></div>
+      <div class="prop"><span class="k">Deposit </span><span class="v">₹${s.deposit.toLocaleString('en-IN')}</span></div>
+      <div class="prop"><span class="k">Area </span><span class="v">${s.sqft} sqft</span></div>
+      <div class="prop"><span class="k">Travel </span><span class="v">${e.walk_minutes} min</span></div>
+      <div class="prop"><span class="k">ORR </span><span class="v">${Math.round(e.orr_distance_m)}m</span></div>
+      <div class="prop"><span class="k">Furnishing </span><span class="v">${d.furnishing || '?'}</span></div>
+      <div class="prop"><span class="k">Floor </span><span class="v">${d.floor || '?'}</span></div>
+      <div class="prop"><span class="k">Power </span><span class="v">${d.power_backup || '?'}</span></div>
+      <div class="prop"><span class="k">Water </span><span class="v">${d.water_supply || '?'}</span></div>
+      <div class="prop"><span class="k">Security </span><span class="v">${d.gated_security === true ? 'Yes' : (d.gated_security === false ? 'No' : '?')}</span></div>
+      <div class="prop"><span class="k">₹/sqft </span><span class="v">${s.sqft > 0 ? (totalRent/s.sqft).toFixed(0) : '?'}</span></div>
+      <div class="prop"><span class="k">LLM </span><span class="v">${e.llm_score}</span></div>
+      <div class="prop"><span class="k">Peace </span><span class="v">${e.peace_score}</span></div>
+    </div>
+    ${s.image_urls && s.image_urls.length > 0 && s.image_urls[0].includes('images.nobroker.in') ? `<div class="images">${s.image_urls.map(u => `<img src="${u}" loading="lazy" onclick="event.stopPropagation();document.getElementById('lightbox-img').src='${u}';document.getElementById('lightbox').classList.add('active')">`).join('')}</div>` : ''}
+    ${e.llm_reasoning ? `<div class="reasoning">${esc(e.llm_reasoning)}</div>` : ''}
+  </div>`;
+}
+
+function render() {
+  const maxRent = +document.getElementById('f-rent').value;
+  const maxTravel = +document.getElementById('f-travel').value;
+  const minSqft = +document.getElementById('f-sqft').value;
+  const furn = document.getElementById('f-furn').value;
+  const powerOnly = document.getElementById('f-power').checked;
+  const gatedOnly = document.getElementById('f-gated').checked;
+  const hideDisq = document.getElementById('f-hide-disq').checked;
+  const sortBy = document.getElementById('f-sort').value;
+
+  document.getElementById('f-rent-val').textContent = maxRent >= 100000 ? '₹1L+' : `₹${(maxRent/1000).toFixed(0)}K`;
+  document.getElementById('f-travel-val').textContent = maxTravel;
+  document.getElementById('f-sqft-val').textContent = minSqft === 0 ? 'Any' : minSqft;
+
+  let filtered = DATA.filter(e => {
+    const s = e.summary, d = e.detail || {};
+    const totalRent = s.rent + (s.maintenance || 0);
+    if (hideDisq && e.disqualified) return false;
+    if (totalRent > maxRent && maxRent < 100000) return false;
+    if (e.walk_minutes > maxTravel) return false;
+    if (s.sqft < minSqft) return false;
+    if (furn !== 'all' && (d.furnishing || '') !== furn) return false;
+    if (powerOnly && !d.power_backup) return false;
+    if (gatedOnly && d.gated_security !== true) return false;
+    return true;
+  });
+
+  const sorters = {
+    score: (a, b) => b.final_score - a.final_score,
+    rent: (a, b) => (a.summary.rent + (a.summary.maintenance||0)) - (b.summary.rent + (b.summary.maintenance||0)),
+    travel: (a, b) => a.walk_minutes - b.walk_minutes,
+    sqft: (a, b) => b.summary.sqft - a.summary.sqft,
+    value: (a, b) => {
+      const va = a.summary.sqft > 0 ? (a.summary.rent + (a.summary.maintenance||0))/a.summary.sqft : 999;
+      const vb = b.summary.sqft > 0 ? (b.summary.rent + (b.summary.maintenance||0))/b.summary.sqft : 999;
+      return va - vb;
+    }
+  };
+  filtered.sort(sorters[sortBy] || sorters.score);
+
+  document.getElementById('cards').innerHTML = filtered.map((e, i) => makeCard(e, i + 1)).join('');
+  document.getElementById('result-count').textContent = `${filtered.length} / ${DATA.length} listings`;
+}
+
+document.getElementById('controls').addEventListener('input', render);
+document.getElementById('controls').addEventListener('change', render);
+render();
+</script>
+</body>
+</html>

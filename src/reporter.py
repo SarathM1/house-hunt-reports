@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -7,6 +8,8 @@ from .config import RunContext
 
 TEMPLATE_DIR = Path(__file__).parent
 TEMPLATE_FILE = "report_template.html"
+INDEX_TEMPLATE_FILE = "index_template.html"
+REPO_ROOT = Path(__file__).parent.parent
 
 
 def generate_report(ctx: RunContext) -> Path:
@@ -41,6 +44,14 @@ def generate_report(ctx: RunContext) -> Path:
     html_path = ctx.path("report.html")
     html_path.write_text(html)
 
+    # GitHub Pages — per-run report
+    reports_dir = REPO_ROOT / "reports" / ctx.run_id
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "index.html").write_text(html)
+
+    # GitHub Pages — regenerate index listing all runs
+    _regenerate_index(env)
+
     # Markdown for LLM consumption
     md_lines = [
         f"# House Hunt Report — {ctx.run_id}",
@@ -64,6 +75,27 @@ def generate_report(ctx: RunContext) -> Path:
     print(f"Reports: {html_path} + {md_path}", flush=True)
     print(f"  {len(qualified)} qualified, {above} above {threshold}, {len(disqualified)} disqualified", flush=True)
     return html_path
+
+
+def _regenerate_index(env: Environment) -> None:
+    reports_dir = REPO_ROOT / "reports"
+    if not reports_dir.exists():
+        return
+    runs = []
+    for run_dir in sorted(reports_dir.iterdir(), reverse=True):
+        config_path = REPO_ROOT / "data" / "runs" / run_dir.name / "config.json"
+        if not config_path.exists():
+            continue
+        config_data = json.loads(config_path.read_text())
+        dt = datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S")
+        runs.append({
+            "run_id": run_dir.name,
+            "config_name": config_data.get("name", "default"),
+            "date_formatted": dt.strftime("%b %-d, %-I:%M %p"),
+        })
+    template = env.get_template(INDEX_TEMPLATE_FILE)
+    html = template.render(runs=runs)
+    (REPO_ROOT / "index.html").write_text(html)
 
 
 def compare_runs(run_dir_a: Path, run_dir_b: Path) -> str:
