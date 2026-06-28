@@ -47,9 +47,12 @@ async def _scrape_seo_pages(localities: list[str], api_key: str) -> dict[str, st
             async with sem:
                 url = SEO_URL_TEMPLATE.format(locality=locality)
                 _log(f"  Fetching {locality}...")
-                md = await _scrape_url(client, url, api_key)
-                results[locality] = md
-                _log(f"  ✓ {locality} done ({len(md)} chars)")
+                try:
+                    md = await _scrape_url(client, url, api_key)
+                    results[locality] = md
+                    _log(f"  ✓ {locality} done ({len(md)} chars)")
+                except Exception as e:
+                    _log(f"  ✗ {locality} failed: {e}")
         await asyncio.gather(*(fetch(loc) for loc in localities))
     return results
 
