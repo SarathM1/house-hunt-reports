@@ -9,3 +9,4 @@ data/runs/
 .DS_Store
 .playwright-mcp/
 .pytest_cache/
+.serena/
