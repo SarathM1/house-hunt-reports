@@ -1,0 +1,11 @@
+exclude:
+  - docs/
+  - src/
+  - tests/
+  - configs/
+  - data/
+  - .venv/
+  - .superpowers/
+  - "*.py"
+  - pyproject.toml
+  - CLAUDE.md
