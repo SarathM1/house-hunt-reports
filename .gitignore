@@ -6,3 +6,4 @@ listings.db
 data/runs/
 .env
 .superpowers/
+docs/superpowers/.DS_Store
