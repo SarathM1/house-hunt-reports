@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 20mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #333; }
+  h1 { font-size: 18px; margin-bottom: 4px; color: #1a1a2e; }
+  .subtitle { font-size: 11px; color: #888; margin-bottom: 16px; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin-bottom: 12px; page-break-inside: avoid; }
+  .card-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .card-header h2 { font-size: 13px; color: #1a1a2e; flex: 1; }
+  .score { background: #1a1a2e; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .score.high { background: #ff6b6b; }
+  .tag { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #d32f2f; margin-left: 6px; }
+  .images { margin-bottom: 8px; }
+  .images img { height: 80px; border-radius: 4px; margin-right: 4px; object-fit: cover; }
+  .props { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 6px; }
+  .prop { font-size: 10px; }
+  .prop .k { color: #999; }
+  .prop .v { font-weight: 600; }
+  .reasoning { font-size: 10px; color: #555; line-height: 1.4; background: #f9f9f9; padding: 6px 8px; border-radius: 4px; margin-top: 6px; }
+  .link { font-size: 9px; color: #4ecdc4; margin-top: 4px; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>House Hunt Report</h1>
+<div class="subtitle">Top {{ entries|length }} listings (score ≥ {{ threshold }})</div>
+
+{% for e in entries %}
+{% set s = e.summary %}
+{% set d = e.detail or {} %}
+<div class="card">
+  <div class="card-header">
+    <h2>#{{ loop.index }} {{ s.title }}{% if e.final_score >= 85 %}<span class="tag">Act Now</span>{% endif %}</h2>
+    <span class="score {{ 'high' if e.final_score >= 85 else '' }}">{{ e.final_score }}</span>
+  </div>
+
+  {% if s.image_urls %}
+  <div class="images">
+    {% for url in s.image_urls[:4] %}
+    {% if 'images.nobroker.in' in url %}
+    <img src="{{ url }}">
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="props">
+    <div class="prop"><span class="k">Rent </span><span class="v">₹{{ "{:,}".format(s.rent) }}{% if s.maintenance %} + {{ "{:,}".format(s.maintenance) }}{% endif %}</span></div>
+    <div class="prop"><span class="k">Deposit </span><span class="v">₹{{ "{:,}".format(s.deposit) }}</span></div>
+    <div class="prop"><span class="k">Area </span><span class="v">{{ s.sqft }} sqft</span></div>
+    <div class="prop"><span class="k">Travel </span><span class="v">{{ e.walk_minutes }} min</span></div>
+    <div class="prop"><span class="k">Furnishing </span><span class="v">{{ d.furnishing or '?' }}</span></div>
+    <div class="prop"><span class="k">Floor </span><span class="v">{{ d.floor or '?' }}</span></div>
+    <div class="prop"><span class="k">Power </span><span class="v">{{ d.power_backup or '?' }}</span></div>
+    <div class="prop"><span class="k">Water </span><span class="v">{{ d.water_supply or '?' }}</span></div>
+    <div class="prop"><span class="k">Security </span><span class="v">{{ 'Yes' if d.gated_security else 'No' }}</span></div>
+  </div>
+
+  {% if e.llm_reasoning %}
+  <div class="reasoning">{{ e.llm_reasoning }}</div>
+  {% endif %}
+
+  <div class="link">{{ s.detail_url }}</div>
+</div>
+{% endfor %}
+</body>
+</html>
