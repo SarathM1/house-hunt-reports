@@ -73,11 +73,11 @@ class ScoredListing(BaseModel):
     disqualify_reason: str | None = None
 
     # Structured scoring
-    criteria_scores: dict[str, CriteriaScore] = {}
-    pros: list[str] = []
-    cons: list[str] = []
-    elevator_pitch: str = ""
-    data_completeness: float = 0.0
+    criteria_scores: dict[str, CriteriaScore]
+    pros: list[str]
+    cons: list[str]
+    elevator_pitch: str
+    data_completeness: float
 
     # Comparative (filled by Pass 2)
     comparative_rank: int | None = None
