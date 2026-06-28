@@ -17,17 +17,40 @@ def test_min_orr_distance():
 
 def test_peace_score_close_to_orr():
     from src.spatial import compute_peace_score
-    score = compute_peace_score(150, "bellandur")
+    score, _ = compute_peace_score(150, "bellandur")
     assert score == 0  # < 200m = disqualified, score 0
 
 
 def test_peace_score_far_from_orr():
     from src.spatial import compute_peace_score
-    score = compute_peace_score(500, "kadubeesanahalli")
+    score, _ = compute_peace_score(500, "kadubeesanahalli")
     assert score >= 70  # far + priority locality
 
 
 def test_peace_score_mid_range():
     from src.spatial import compute_peace_score
-    score = compute_peace_score(300, "panathur")
+    score, _ = compute_peace_score(300, "panathur")
     assert 20 < score < 70
+
+
+def test_peace_score_returns_breakdown():
+    from src.spatial import compute_peace_score
+    score, breakdown = compute_peace_score(450, "kadubeesanahalli")
+    assert breakdown.orr_distance_m == 450
+    assert breakdown.locality_bonus == 20  # priority locality
+    assert breakdown.final == score
+    assert breakdown.base_score > 0
+
+
+def test_peace_breakdown_no_bonus():
+    from src.spatial import compute_peace_score
+    score, breakdown = compute_peace_score(500, "bellandur")
+    assert breakdown.locality_bonus == 0
+    assert breakdown.final == score
+
+
+def test_peace_breakdown_close_to_orr():
+    from src.spatial import compute_peace_score
+    score, breakdown = compute_peace_score(150, "bellandur")
+    assert score == 0
+    assert breakdown.final == 0

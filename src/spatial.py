@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 
 from .config import GOOGLE_MAPS_API_KEY, ORR_REFERENCE_POINTS, RunContext
+from .models import PeaceBreakdown
 
 
 def geocode_address(address: str, locality: str, api_key: str = "") -> tuple[float, float] | None:
@@ -90,15 +91,18 @@ def min_orr_distance(lat: float, lon: float) -> float:
 PRIORITY_LOCALITIES = {"kadubeesanahalli"}
 
 
-def compute_peace_score(orr_distance_m: float, locality: str) -> float:
+def compute_peace_score(orr_distance_m: float, locality: str) -> tuple[float, PeaceBreakdown]:
+    bonus = 20 if locality in PRIORITY_LOCALITIES else 0
     if orr_distance_m < 200:
-        return 0.0
+        breakdown = PeaceBreakdown(orr_distance_m=orr_distance_m, base_score=0, locality_bonus=0, final=0)
+        return 0.0, breakdown
     if orr_distance_m < 400:
         base = 30 + (orr_distance_m - 200) * (30 / 200)
     else:
         base = 60 + min(20, (orr_distance_m - 400) * (20 / 600))
-    bonus = 20 if locality in PRIORITY_LOCALITIES else 0
-    return min(100, base + bonus)
+    final = min(100, base + bonus)
+    breakdown = PeaceBreakdown(orr_distance_m=orr_distance_m, base_score=round(base, 1), locality_bonus=bonus, final=final)
+    return final, breakdown
 
 
 def _log(msg: str) -> None:
@@ -139,7 +143,7 @@ def run_filter(ctx: RunContext) -> Path:
             _log(f"  Skipped: {orr_dist:.0f}m from ORR (min {config.min_orr_distance_m})")
             continue
 
-        peace = compute_peace_score(orr_dist, summary["locality"])
+        peace, peace_breakdown = compute_peace_score(orr_dist, summary["locality"])
         passed.append({
             **entry,
             "lat": lat,
@@ -147,6 +151,7 @@ def run_filter(ctx: RunContext) -> Path:
             "walk_minutes": round(travel, 1),
             "orr_distance_m": round(orr_dist, 0),
             "peace_score": round(peace, 1),
+            "peace_breakdown": peace_breakdown.model_dump(),
         })
         _log(f"  ✓ PASSED: {travel:.1f}min {mode}, {orr_dist:.0f}m ORR, peace={peace:.0f}")
 
