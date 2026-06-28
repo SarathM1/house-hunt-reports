@@ -1,32 +1,20 @@
-"""Spatial filtering via Google Maps APIs."""
 import json
 import math
-from datetime import date
 from pathlib import Path
 
-import requests
+import httpx
 
-from .config import (
-    FILTERED_DIR,
-    GOOGLE_MAPS_API_KEY,
-    MAX_WALK_MINUTES,
-    MIN_ORR_DISTANCE_METERS,
-    ORR_REFERENCE_POINTS,
-    PTP_LAT,
-    PTP_LON,
-)
-from .models import ListingDetail, ListingSummary
+from .config import GOOGLE_MAPS_API_KEY, ORR_REFERENCE_POINTS, RunContext
 
 
-def geocode_address(address: str, locality: str) -> tuple[float, float] | None:
-    """Geocode an address via Google Maps Geocoding API. Returns (lat, lon) or None."""
-    if not GOOGLE_MAPS_API_KEY:
-        raise RuntimeError("GOOGLE_MAPS_API_KEY not set in .env")
-
+def geocode_address(address: str, locality: str, api_key: str = "") -> tuple[float, float] | None:
+    api_key = api_key or GOOGLE_MAPS_API_KEY
+    if not api_key:
+        raise RuntimeError("GOOGLE_MAPS_API_KEY not set")
     query = f"{address}, {locality}, Bangalore, Karnataka, India"
-    resp = requests.get(
+    resp = httpx.get(
         "https://maps.googleapis.com/maps/api/geocode/json",
-        params={"address": query, "key": GOOGLE_MAPS_API_KEY},
+        params={"address": query, "key": api_key},
         timeout=10,
     )
     resp.raise_for_status()
@@ -37,18 +25,19 @@ def geocode_address(address: str, locality: str) -> tuple[float, float] | None:
     return (loc["lat"], loc["lng"])
 
 
-def get_walk_duration(lat: float, lon: float) -> float | None:
-    """Get walking duration in minutes from coordinates to PTP via Distance Matrix API."""
-    if not GOOGLE_MAPS_API_KEY:
-        raise RuntimeError("GOOGLE_MAPS_API_KEY not set in .env")
-
-    resp = requests.get(
+def get_walk_duration(
+    lat: float, lon: float, ptp_coords: tuple[float, float], api_key: str = ""
+) -> float | None:
+    api_key = api_key or GOOGLE_MAPS_API_KEY
+    if not api_key:
+        raise RuntimeError("GOOGLE_MAPS_API_KEY not set")
+    resp = httpx.get(
         "https://maps.googleapis.com/maps/api/distancematrix/json",
         params={
             "origins": f"{lat},{lon}",
-            "destinations": f"{PTP_LAT},{PTP_LON}",
+            "destinations": f"{ptp_coords[0]},{ptp_coords[1]}",
             "mode": "walking",
-            "key": GOOGLE_MAPS_API_KEY,
+            "key": api_key,
         },
         timeout=10,
     )
@@ -64,72 +53,76 @@ def get_walk_duration(lat: float, lon: float) -> float | None:
 
 
 def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Haversine distance in meters between two points."""
     R = 6371000
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def min_orr_distance(lat: float, lon: float) -> float:
-    """Minimum distance in meters from coordinates to ORR reference points."""
     return min(haversine_meters(lat, lon, rlat, rlon) for rlat, rlon in ORR_REFERENCE_POINTS)
 
 
-def filter_listings(listings: list[ListingSummary]) -> list[ListingDetail]:
-    """Geocode, compute distances, filter by walk time and ORR distance."""
+PRIORITY_LOCALITIES = {"kadubeesanahalli"}
+
+
+def compute_peace_score(orr_distance_m: float, locality: str) -> float:
+    if orr_distance_m < 200:
+        return 0.0
+    if orr_distance_m < 400:
+        base = 30 + (orr_distance_m - 200) * (30 / 200)
+    else:
+        base = 60 + min(20, (orr_distance_m - 400) * (20 / 600))
+    bonus = 20 if locality in PRIORITY_LOCALITIES else 0
+    return min(100, base + bonus)
+
+
+def run_filter(ctx: RunContext) -> Path:
+    config = ctx.config
+    raw_path = ctx.path("raw.json")
+    raw_data = json.loads(raw_path.read_text())
     passed = []
 
-    for i, ls in enumerate(listings):
-        print(f"[{i+1}/{len(listings)}] Geocoding: {ls.title[:60]}...")
-        coords = geocode_address(ls.address or ls.title, ls.locality)
+    for i, entry in enumerate(raw_data):
+        summary = entry["summary"]
+        title = summary["title"][:50]
+        print(f"[{i + 1}/{len(raw_data)}] Filtering: {title}...")
+
+        coords = geocode_address(summary["address"] or title, summary["locality"])
         if not coords:
-            print(f"  Skipped: geocoding failed")
+            print("  Skipped: geocoding failed")
             continue
 
         lat, lon = coords
-        walk = get_walk_duration(lat, lon)
+        walk = get_walk_duration(lat, lon, config.ptp_coords)
         if walk is None:
-            print(f"  Skipped: walk duration unavailable")
+            print("  Skipped: walk duration unavailable")
             continue
-        if walk > MAX_WALK_MINUTES:
-            print(f"  Skipped: {walk:.1f}min walk (max {MAX_WALK_MINUTES})")
+        if walk > config.max_walk_minutes:
+            print(f"  Skipped: {walk:.1f}min walk (max {config.max_walk_minutes})")
             continue
 
         orr_dist = min_orr_distance(lat, lon)
-        if orr_dist < MIN_ORR_DISTANCE_METERS:
-            print(f"  Skipped: {orr_dist:.0f}m from ORR (min {MIN_ORR_DISTANCE_METERS})")
+        if orr_dist < config.min_orr_distance_m:
+            print(f"  Skipped: {orr_dist:.0f}m from ORR (min {config.min_orr_distance_m})")
             continue
 
-        detail = ListingDetail(
-            **ls.model_dump(),
-            latitude=lat,
-            longitude=lon,
-        )
-        detail.source_locality = ls.source_locality
-        passed.append(detail)
-        print(f"  PASSED: {walk:.1f}min walk, {orr_dist:.0f}m from ORR")
+        peace = compute_peace_score(orr_dist, summary["locality"])
+        passed.append({
+            **entry,
+            "lat": lat,
+            "lon": lon,
+            "walk_minutes": round(walk, 1),
+            "orr_distance_m": round(orr_dist, 0),
+            "peace_score": round(peace, 1),
+        })
+        print(f"  PASSED: {walk:.1f}min, {orr_dist:.0f}m ORR, peace={peace:.0f}")
 
-    return passed
-
-
-def save_filtered(listings: list[ListingDetail], tag: str = "") -> Path:
-    """Save filtered listings to timestamped JSON."""
-    FILTERED_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{date.today().isoformat()}{'-' + tag if tag else ''}.json"
-    path = FILTERED_DIR / filename
-    path.write_text(json.dumps([l.model_dump() for l in listings], indent=2))
-    print(f"Saved {len(listings)} filtered listings to {path}")
-    return path
-
-
-def run(raw_path: Path | str) -> Path | None:
-    """Load raw listings, filter, save."""
-    raw = json.loads(Path(raw_path).read_text())
-    listings = [ListingSummary(**item) for item in raw]
-    filtered = filter_listings(listings)
-    if filtered:
-        return save_filtered(filtered)
-    print("No listings passed spatial filter.")
-    return None
+    out_path = ctx.path("filtered.json")
+    out_path.write_text(json.dumps(passed, indent=2))
+    print(f"Saved {len(passed)}/{len(raw_data)} listings to {out_path}")
+    return out_path
