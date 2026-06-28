@@ -8,12 +8,12 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
 
-  .top-bar { background: #1a1a2e; color: #fff; padding: 20px 32px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-  .top-bar h1 { font-size: 20px; margin-bottom: 4px; }
-  .top-bar .meta { font-size: 13px; color: #aaa; }
+  .top-bar { background: #1a1a2e; color: #fff; padding: 16px 20px; }
+  .top-bar h1 { font-size: 18px; margin-bottom: 4px; }
+  .top-bar .meta { font-size: 12px; color: #aaa; }
   .top-bar .meta span { color: #4ecdc4; font-weight: 600; }
 
-  .controls { background: #fff; padding: 16px 32px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 68px; z-index: 99; display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .controls { background: #fff; padding: 12px 20px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 99; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
   .control-group { display: flex; flex-direction: column; gap: 2px; }
   .control-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
   .control-group select, .control-group input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: #fff; }
@@ -24,7 +24,18 @@
   .toggle label { font-size: 13px; cursor: pointer; }
   .result-count { font-size: 13px; color: #888; margin-left: auto; padding: 6px 0; }
 
-  .container { padding: 20px 32px; }
+  .container { padding: 16px 20px; }
+
+  @media (max-width: 600px) {
+    .top-bar { padding: 12px 16px; }
+    .top-bar h1 { font-size: 16px; }
+    .controls { padding: 10px 16px; gap: 8px; }
+    .control-group input[type=range] { width: 100px; }
+    .container { padding: 12px 16px; }
+    .card { padding: 14px; }
+    .props { gap: 4px 12px; }
+    .images img { height: 80px; }
+  }
   .cards { display: grid; gap: 12px; }
   .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #ddd; transition: opacity 0.2s; }
   .card.qualified { border-left-color: #4ecdc4; }
@@ -139,6 +150,8 @@
 const DATA = {{ entries_json }};
 const THRESHOLD = {{ threshold }};
 
+function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 function makeCard(e, rank) {
   const s = e.summary, d = e.detail || {};
   const isDisq = e.disqualified;
@@ -150,7 +163,7 @@ function makeCard(e, rank) {
 
   return `<div class="card ${cls}" data-rent="${totalRent}" data-travel="${e.walk_minutes}" data-sqft="${s.sqft}" data-score="${e.final_score}" data-furn="${d.furnishing || ''}" data-power="${d.power_backup || ''}" data-gated="${d.gated_security}" data-disq="${isDisq}" data-value="${s.sqft > 0 ? (totalRent/s.sqft).toFixed(1) : 999}">
     <div class="card-top">
-      <h2><span class="rank">#${rank}</span><a href="${s.detail_url}" target="_blank">${s.title}</a>${tagHtml}</h2>
+      <h2><span class="rank">#${rank}</span><a href="${s.detail_url}" target="_blank">${esc(s.title)}</a>${tagHtml}</h2>
       <span class="score ${scoreClass}">${e.final_score}</span>
     </div>
     ${isDisq ? `<div class="disq-reason">${e.disqualify_reason}</div>` : ''}
@@ -170,7 +183,7 @@ function makeCard(e, rank) {
       <div class="prop"><span class="k">Peace </span><span class="v">${e.peace_score}</span></div>
     </div>
     ${s.image_urls && s.image_urls.length > 0 && s.image_urls[0].includes('images.nobroker.in') ? `<div class="images">${s.image_urls.map(u => `<img src="${u}" loading="lazy" onclick="event.stopPropagation();document.getElementById('lightbox-img').src='${u}';document.getElementById('lightbox').classList.add('active')">`).join('')}</div>` : ''}
-    ${e.llm_reasoning ? `<div class="reasoning">${e.llm_reasoning}</div>` : ''}
+    ${e.llm_reasoning ? `<div class="reasoning">${esc(e.llm_reasoning)}</div>` : ''}
   </div>`;
 }
 
