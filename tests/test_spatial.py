@@ -54,3 +54,18 @@ def test_peace_breakdown_close_to_orr():
     score, breakdown = compute_peace_score(150, "bellandur")
     assert score == 0
     assert breakdown.final == 0
+
+
+def test_validate_geocode_within_locality():
+    from src.spatial import _validate_geocode
+    assert _validate_geocode(12.9591, 77.7000, "marathahalli") is True
+
+
+def test_validate_geocode_drifted():
+    from src.spatial import _validate_geocode
+    assert _validate_geocode(13.0575, 77.6262, "marathahalli") is False
+
+
+def test_validate_geocode_unknown_locality():
+    from src.spatial import _validate_geocode
+    assert _validate_geocode(12.0, 77.0, "unknown-place") is True

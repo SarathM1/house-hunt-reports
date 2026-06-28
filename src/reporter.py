@@ -54,6 +54,7 @@ def generate_report(ctx: RunContext) -> Path:
         entries_json=json.dumps(sorted_entries),
         criteria_averages_json=json.dumps(criteria_averages),
         comparative_json=json.dumps(comparative) if comparative else "null",
+        travel_mode=getattr(config, "travel_mode", "walking"),
     )
 
     html_path = ctx.path("report.html")

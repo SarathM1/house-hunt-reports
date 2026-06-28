@@ -154,7 +154,7 @@
     </div>
   </div>
   <div class="control-group">
-    <label>Max Travel (min)</label>
+    <label>Max {{ travel_mode }} (min)</label>
     <div style="display:flex;align-items:center;gap:6px;">
       <input type="range" id="f-travel" min="5" max="120" step="5" value="120">
       <span class="range-val" id="f-travel-val">120</span>
@@ -231,6 +231,7 @@ const DATA = {{ entries_json }};
 const THRESHOLD = {{ threshold }};
 const CRITERIA_AVERAGES = {{ criteria_averages_json }};
 const COMPARATIVE = {{ comparative_json }};
+const TRAVEL_MODE = '{{ travel_mode }}';
 
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -331,7 +332,7 @@ function makeCard(e, rank) {
       <div class="prop"><span class="k">Rent </span><span class="v">&#x20b9;${totalRent.toLocaleString('en-IN')}</span></div>
       <div class="prop"><span class="k">Deposit </span><span class="v">&#x20b9;${s.deposit.toLocaleString('en-IN')}</span></div>
       <div class="prop"><span class="k">Area </span><span class="v">${s.sqft} sqft</span></div>
-      <div class="prop"><span class="k">Travel </span><span class="v">${e.walk_minutes} min</span></div>
+      <div class="prop"><span class="k">${TRAVEL_MODE === 'driving' ? '🚗 Drive' : '🚶 Walk'} </span><span class="v">${e.walk_minutes} min${TRAVEL_MODE === 'driving' ? ' (peak)' : ''}</span></div>
       <div class="prop"><span class="k">ORR </span><span class="v">${Math.round(e.orr_distance_m)}m</span></div>
       <div class="prop"><span class="k">Furnishing </span><span class="v">${d.furnishing || '?'}</span></div>
       <div class="prop"><span class="k">Floor </span><span class="v">${d.floor || '?'}</span></div>

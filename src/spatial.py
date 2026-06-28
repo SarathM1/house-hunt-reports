@@ -90,6 +90,29 @@ def min_orr_distance(lat: float, lon: float) -> float:
 
 PRIORITY_LOCALITIES = {"kadubeesanahalli"}
 
+LOCALITY_CENTERS = {
+    "kadubeesanahalli": (12.9360, 77.6880),
+    "bellandur": (12.9261, 77.6757),
+    "panathur": (12.9411, 77.6990),
+    "marathahalli": (12.9591, 77.7000),
+    "whitefield": (12.9698, 77.7500),
+    "harlur": (12.9080, 77.6630),
+    "sarjapur": (12.8650, 77.7700),
+    "hsr-layout": (12.9116, 77.6389),
+    "koramangala": (12.9279, 77.6271),
+    "electronic-city": (12.8440, 77.6630),
+    "btm-layout": (12.9166, 77.6101),
+}
+
+MAX_GEOCODE_DRIFT_M = 10000
+
+
+def _validate_geocode(lat: float, lon: float, locality: str) -> bool:
+    center = LOCALITY_CENTERS.get(locality)
+    if not center:
+        return True
+    return haversine_meters(lat, lon, center[0], center[1]) <= MAX_GEOCODE_DRIFT_M
+
 
 def compute_peace_score(orr_distance_m: float, locality: str) -> tuple[float, PeaceBreakdown]:
     bonus = 20 if locality in PRIORITY_LOCALITIES else 0
@@ -121,11 +144,15 @@ def run_filter(ctx: RunContext) -> Path:
         title = summary["title"][:50]
         _log(f"[{i + 1}/{len(raw_data)}] {title}...")
 
-        # Title has building name + locality — geocodes better than the messy address field
-        geocode_query = summary["title"]
-        coords = geocode_address(geocode_query, summary["locality"])
+        coords = geocode_address(summary["title"], summary["locality"])
+        if coords and not _validate_geocode(coords[0], coords[1], summary["locality"]):
+            _log(f"  Geocode drifted, retrying with address...")
+            coords = geocode_address(summary["address"], summary["locality"])
         if not coords:
             _log("  Skipped: geocoding failed")
+            continue
+        if not _validate_geocode(coords[0], coords[1], summary["locality"]):
+            _log(f"  Skipped: geocode too far from {summary['locality']}")
             continue
 
         lat, lon = coords
