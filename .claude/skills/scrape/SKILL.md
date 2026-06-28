@@ -1,36 +1,34 @@
 ---
 name: scrape
-description: Scrape 2BHK rental listings from NoBroker for all target localities near Prestige Tech Park, Bangalore. Use when the user says "scrape", "fetch listings", "get new listings", "pull from NoBroker", "check for new rentals", or wants fresh property data. Always use this before filtering or scoring if no recent raw data exists in data/raw/.
+description: Scrape 2BHK rental listings from NoBroker for all target localities near Prestige Tech Park. Use when the user says "scrape", "fetch listings", "get new listings", "pull from NoBroker", or wants fresh property data.
 ---
 
 # Scrape NoBroker Listings
 
-Scrape 2BHK rental listings from NoBroker SEO pages via Firecrawl cloud API.
-
 ## What it does
 
-1. Hits NoBroker SEO listing pages for each target locality (kadubeesanahalli, bellandur, panathur, marathahalli, doddakannelli)
-2. Parses listing summaries from server-rendered markdown (rent, deposit, sqft, address, detail URL)
-3. Deduplicates by URL across localities
-4. Saves to `data/raw/YYYY-MM-DD.json`
+Two-phase scrape via Firecrawl cloud API:
+1. SEO listing pages for target localities → listing summaries
+2. Detail pages for new listings passing rent filter → full listing data
+3. SQLite dedup skips already-seen property IDs
 
 ## How to run
 
 ```bash
 cd /Users/sarath.m/Documents/github/house_hunt
-.venv/bin/python -m src.scraper
+.venv/bin/python -c "
+from src.config import load_config, create_run
+from src.scraper import run_scrape
+import sys
+
+profile = sys.argv[1] if len(sys.argv) > 1 else 'default'
+cfg = load_config(profile)
+ctx = create_run(cfg)
+print(f'Run: {ctx.run_id} (config: {cfg.name})')
+run_scrape(ctx)
+" ${CONFIG:-default}
 ```
-
-If `.venv` doesn't exist yet, set it up first:
-```bash
-uv venv .venv
-uv pip install requests pydantic python-dotenv anthropic --python .venv/bin/python
-```
-
-## Output
-
-JSON array of `ListingSummary` objects in `data/raw/`. Each has: title, url, rent, maintenance, deposit, sqft, address, locality.
 
 ## After scraping
 
-Tell the user how many listings were found per locality and total unique count. Suggest running `/filter` next if Google Maps API key is configured, or `/score` to go straight to LLM evaluation (skipping spatial filtering).
+Report listing count per locality and total unique. Suggest `/filter` next (needs GOOGLE_MAPS_API_KEY), or `/score` to skip spatial filtering.

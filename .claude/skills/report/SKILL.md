@@ -1,36 +1,28 @@
 ---
 name: report
-description: Generate a ranked markdown report of scored rental listings with details, scores, and NoBroker links. Use when the user says "report", "show results", "what are the top listings", "rank them", "show me the best ones", or wants to see the final output of the house hunting pipeline.
+description: Generate ranked report of scored listings with scores, details, and NoBroker links. Use when the user says "report", "show results", "top listings", "rank them", or wants final output.
 ---
 
 # Report Generator
-
-Generate a ranked markdown report from scored listings.
-
-## What it does
-
-1. Loads scored listings from `data/scored/`
-2. Sorts by total_score descending
-3. Generates markdown with ranking, scores, key details, LLM reasoning, and NoBroker links
-4. Marks listings above/below the threshold (default: 85)
 
 ## How to run
 
 ```bash
 cd /Users/sarath.m/Documents/github/house_hunt
-.venv/bin/python -c "from src.reporter import run; run('data/scored/LATEST_FILE.json')"
+.venv/bin/python -c "
+from src.config import Config, RunContext
+from src.reporter import generate_report
+from pathlib import Path
+import json, sys
+
+run_id = sys.argv[1]
+run_dir = Path('data/runs') / run_id
+cfg = Config(**json.loads((run_dir / 'config.json').read_text()))
+ctx = RunContext(run_id=run_id, run_dir=run_dir, config=cfg)
+generate_report(ctx)
+" ${RUN_ID}
 ```
-
-## Output
-
-Prints markdown report to stdout. Each listing shows:
-- Rank and pass/fail indicator
-- Total score breakdown (LLM + Peace)
-- Rent, deposit, area, walk time, ORR distance
-- Furnishing, floor, power backup, security
-- LLM reasoning
-- Direct NoBroker link
 
 ## After reporting
 
-Present the top listings to the user. Offer to open specific NoBroker links in the browser for closer inspection.
+Present ranked results. Highlight any score ≥ threshold. Offer to open top picks in browser.
