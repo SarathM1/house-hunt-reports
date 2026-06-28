@@ -97,7 +97,9 @@ def run_filter(ctx: RunContext) -> Path:
         title = summary["title"][:50]
         _log(f"[{i + 1}/{len(raw_data)}] {title}...")
 
-        coords = geocode_address(summary["address"] or title, summary["locality"])
+        # Title has building name + locality — geocodes better than the messy address field
+        geocode_query = summary["title"]
+        coords = geocode_address(geocode_query, summary["locality"])
         if not coords:
             _log("  Skipped: geocoding failed")
             continue

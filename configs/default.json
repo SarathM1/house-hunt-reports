@@ -4,7 +4,7 @@
   "ptp_coords": [12.9420, 77.6905],
   "max_walk_minutes": 12,
   "min_orr_distance_m": 200,
-  "max_rent": 50000,
+  "max_rent": 60000,
   "score_threshold": 85,
   "bhk": 2,
   "score_weights": {"peace": 0.4, "llm": 0.6},
