@@ -1,0 +1,21 @@
+{
+  "name": "default",
+  "target_localities": ["kadubeesanahalli", "bellandur", "panathur", "marathahalli"],
+  "ptp_coords": [12.9420, 77.6905],
+  "max_walk_minutes": 12,
+  "min_orr_distance_m": 200,
+  "max_rent": 50000,
+  "score_threshold": 85,
+  "bhk": 2,
+  "score_weights": {"peace": 0.4, "llm": 0.6},
+  "llm_weights": {
+    "power_backup": 20,
+    "noise": 20,
+    "internet": 15,
+    "light_ventilation": 10,
+    "water": 10,
+    "maintenance": 10,
+    "wfh_livability": 10,
+    "value": 5
+  }
+}

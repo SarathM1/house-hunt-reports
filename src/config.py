@@ -1,23 +1,21 @@
+import json
 import os
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-FIRECRAWL_API_KEY = os.environ["FIRECRAWL_API_KEY"]
+PROJECT_ROOT = Path(__file__).parent.parent
+DEFAULT_CONFIGS_DIR = PROJECT_ROOT / "configs"
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "runs"
+
+FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
-PROJECT_ROOT = Path(__file__).parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-RAW_DIR = DATA_DIR / "raw"
-FILTERED_DIR = DATA_DIR / "filtered"
-SCORED_DIR = DATA_DIR / "scored"
-
-# Prestige Tech Park main gate coordinates
-PTP_LAT = 12.9316
-PTP_LON = 77.6904
-
-# Outer Ring Road reference line (approximate center lat/lon segments)
 ORR_REFERENCE_POINTS = [
     (12.9352, 77.6830),
     (12.9340, 77.6870),
@@ -26,21 +24,51 @@ ORR_REFERENCE_POINTS = [
     (12.9280, 77.7000),
 ]
 
-# Pipeline thresholds
-MAX_WALK_MINUTES = 12
-MIN_ORR_DISTANCE_METERS = 200
-MIN_SCORE_FOR_REPORT = 85
 
-# Target localities for NoBroker SEO pages
-TARGET_LOCALITIES = [
-    "kadubeesanahalli",
-    "bellandur",
-    "panathur",
-    "marathahalli",
-    "doddakannelli",
-]
+class Config(BaseModel):
+    name: str
+    target_localities: list[str]
+    ptp_coords: tuple[float, float]
+    max_walk_minutes: int
+    min_orr_distance_m: int
+    max_rent: int
+    score_threshold: int
+    bhk: int
+    score_weights: dict[str, float]
+    llm_weights: dict[str, int]
 
-# Max rent filter (optional, set 0 to disable)
-MAX_RENT = 0
-# Min sqft filter (optional, set 0 to disable)
-MIN_SQFT = 0
+
+@dataclass
+class RunContext:
+    run_id: str
+    run_dir: Path
+    config: Config
+
+    def path(self, filename: str) -> Path:
+        return self.run_dir / filename
+
+
+def load_config(profile: str = "default", configs_dir: Path | None = None) -> Config:
+    configs_dir = configs_dir or DEFAULT_CONFIGS_DIR
+    default_path = configs_dir / "default.json"
+    default_data = json.loads(default_path.read_text())
+
+    if profile != "default":
+        profile_path = configs_dir / f"{profile}.json"
+        profile_data = json.loads(profile_path.read_text())
+        merged = {**default_data, **profile_data}
+    else:
+        merged = default_data
+
+    return Config(**merged)
+
+
+def create_run(config: Config, data_dir: Path | None = None) -> RunContext:
+    data_dir = data_dir or DEFAULT_DATA_DIR
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = data_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "config.json").write_text(
+        json.dumps(config.model_dump(), indent=2)
+    )
+    return RunContext(run_id=run_id, run_dir=run_dir, config=config)
