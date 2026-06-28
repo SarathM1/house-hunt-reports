@@ -10,3 +10,4 @@ data/runs/
 .playwright-mcp/
 .pytest_cache/
 .serena/
+*.png
