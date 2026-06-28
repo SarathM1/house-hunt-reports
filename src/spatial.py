@@ -25,20 +25,31 @@ def geocode_address(address: str, locality: str, api_key: str = "") -> tuple[flo
     return (loc["lat"], loc["lng"])
 
 
-def get_walk_duration(
-    lat: float, lon: float, ptp_coords: tuple[float, float], api_key: str = ""
+def get_travel_duration(
+    lat: float, lon: float, ptp_coords: tuple[float, float],
+    mode: str = "walking", api_key: str = ""
 ) -> float | None:
     api_key = api_key or GOOGLE_MAPS_API_KEY
     if not api_key:
         raise RuntimeError("GOOGLE_MAPS_API_KEY not set")
+    params = {
+        "origins": f"{lat},{lon}",
+        "destinations": f"{ptp_coords[0]},{ptp_coords[1]}",
+        "mode": mode,
+        "key": api_key,
+    }
+    # For driving mode, use peak hour traffic estimate (9 AM Monday)
+    if mode == "driving":
+        import calendar, time as _time
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        days_ahead = (0 - now.weekday()) % 7 or 7
+        next_monday = now + timedelta(days=days_ahead)
+        peak = next_monday.replace(hour=9, minute=0, second=0, microsecond=0)
+        params["departure_time"] = int(peak.timestamp())
     resp = httpx.get(
         "https://maps.googleapis.com/maps/api/distancematrix/json",
-        params={
-            "origins": f"{lat},{lon}",
-            "destinations": f"{ptp_coords[0]},{ptp_coords[1]}",
-            "mode": "walking",
-            "key": api_key,
-        },
+        params=params,
         timeout=10,
     )
     resp.raise_for_status()
@@ -47,9 +58,18 @@ def get_walk_duration(
         element = data["rows"][0]["elements"][0]
         if element["status"] != "OK":
             return None
-        return element["duration"]["value"] / 60.0
+        # Use duration_in_traffic if available (driving mode)
+        duration = element.get("duration_in_traffic", element["duration"])
+        return duration["value"] / 60.0
     except (KeyError, IndexError):
         return None
+
+
+# Backward compat
+def get_walk_duration(
+    lat: float, lon: float, ptp_coords: tuple[float, float], api_key: str = ""
+) -> float | None:
+    return get_travel_duration(lat, lon, ptp_coords, mode="walking", api_key=api_key)
 
 
 def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -105,12 +125,13 @@ def run_filter(ctx: RunContext) -> Path:
             continue
 
         lat, lon = coords
-        walk = get_walk_duration(lat, lon, config.ptp_coords)
-        if walk is None:
-            _log("  Skipped: walk duration unavailable")
+        mode = getattr(config, "travel_mode", "walking")
+        travel = get_travel_duration(lat, lon, config.ptp_coords, mode=mode)
+        if travel is None:
+            _log(f"  Skipped: {mode} duration unavailable")
             continue
-        if walk > config.max_walk_minutes:
-            _log(f"  Skipped: {walk:.1f}min walk (max {config.max_walk_minutes})")
+        if travel > config.max_walk_minutes:
+            _log(f"  Skipped: {travel:.1f}min {mode} (max {config.max_walk_minutes})")
             continue
 
         orr_dist = min_orr_distance(lat, lon)
@@ -123,11 +144,11 @@ def run_filter(ctx: RunContext) -> Path:
             **entry,
             "lat": lat,
             "lon": lon,
-            "walk_minutes": round(walk, 1),
+            "walk_minutes": round(travel, 1),
             "orr_distance_m": round(orr_dist, 0),
             "peace_score": round(peace, 1),
         })
-        _log(f"  ✓ PASSED: {walk:.1f}min, {orr_dist:.0f}m ORR, peace={peace:.0f}")
+        _log(f"  ✓ PASSED: {travel:.1f}min {mode}, {orr_dist:.0f}m ORR, peace={peace:.0f}")
 
     _log(f"\n{len(passed)}/{len(raw_data)} passed spatial filter")
 

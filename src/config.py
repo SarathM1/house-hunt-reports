@@ -30,6 +30,7 @@ class Config(BaseModel):
     target_localities: list[str]
     ptp_coords: tuple[float, float]
     max_walk_minutes: int
+    travel_mode: str = "walking"
     min_orr_distance_m: int
     max_rent: int
     score_threshold: int

@@ -1,0 +1,13 @@
+{
+  "name": "budget",
+  "target_localities": [
+    "kadubeesanahalli", "bellandur", "panathur", "marathahalli",
+    "whitefield", "harlur", "sarjapur", "hsr-layout",
+    "koramangala", "electronic-city", "btm-layout"
+  ],
+  "max_walk_minutes": 120,
+  "travel_mode": "driving",
+  "min_orr_distance_m": 100,
+  "max_rent": 40000,
+  "score_threshold": 75
+}
