@@ -46,11 +46,16 @@ def test_generate_report(tmp_path):
     (run_dir / "config.json").write_text(cfg.model_dump_json())
     ctx = RunContext(run_id="test", run_dir=run_dir, config=cfg)
 
-    report = generate_report(ctx)
-    assert "Great Flat" in report
-    assert "#1" in report
-    assert "80.8" in report
-    assert (run_dir / "report.md").exists()
+    html_path = generate_report(ctx)
+    assert html_path.exists()
+    assert html_path.suffix == ".html"
+    html = html_path.read_text()
+    assert "Great Flat" in html
+    assert "80.8" in html
+    assert "nobroker.in/a1" in html
+    md = (run_dir / "report.md").read_text()
+    assert "Great Flat" in md
+    assert "80.8" in md
 
 
 def test_compare_runs(tmp_path):

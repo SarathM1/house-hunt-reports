@@ -1,55 +1,68 @@
 import json
 from pathlib import Path
 
+from jinja2 import Environment, FileSystemLoader
+
 from .config import RunContext
 
+TEMPLATE_DIR = Path(__file__).parent
+TEMPLATE_FILE = "report_template.html"
 
-def generate_report(ctx: RunContext) -> str:
+
+def generate_report(ctx: RunContext) -> Path:
     config = ctx.config
     scored_path = ctx.path("scored.json")
     entries = json.loads(scored_path.read_text())
-    entries.sort(key=lambda x: x["final_score"], reverse=True)
+
+    qualified = [e for e in entries if not e["disqualified"]]
+    disqualified = [e for e in entries if e["disqualified"]]
+    qualified.sort(key=lambda x: x["final_score"], reverse=True)
+    disqualified.sort(key=lambda x: x["final_score"], reverse=True)
+    sorted_entries = qualified + disqualified
 
     threshold = config.score_threshold
-    above = sum(1 for e in entries if e["final_score"] >= threshold and not e["disqualified"])
+    above = sum(1 for e in qualified if e["final_score"] >= threshold)
 
-    lines = [
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=True)
+    template = env.get_template(TEMPLATE_FILE)
+    html = template.render(
+        run_id=ctx.run_id,
+        config_name=config.name,
+        total=len(entries),
+        qualified=len(qualified),
+        disqualified_count=len(disqualified),
+        above_threshold=above,
+        threshold=threshold,
+        entries=sorted_entries,
+    )
+
+    # HTML for humans
+    html_path = ctx.path("report.html")
+    html_path.write_text(html)
+
+    # Markdown for LLM consumption
+    md_lines = [
         f"# House Hunt Report — {ctx.run_id}",
-        f"\n**Config:** {config.name} | **Scored:** {len(entries)} | **Above {threshold}:** {above}\n",
+        f"\n**Config:** {config.name} | **Scored:** {len(entries)} | **Qualified:** {len(qualified)} | **Above {threshold}:** {above}\n",
         "---\n",
     ]
-
-    for rank, e in enumerate(entries, 1):
+    for rank, e in enumerate(sorted_entries, 1):
         s = e["summary"]
         d = e.get("detail") or {}
-        disq = "DISQUALIFIED" if e["disqualified"] else ""
-        act = "ACT NOW" if e["final_score"] >= threshold and not e["disqualified"] else ""
-        tag = disq or act
-
-        lines.append(f"## #{rank} {s['title']} {tag}")
-        lines.append(f"**Score: {e['final_score']}** (LLM: {e['llm_score']} | Peace: {e['peace_score']})\n")
+        tag = "DISQUALIFIED" if e["disqualified"] else ("ACT NOW" if e["final_score"] >= threshold else "")
+        md_lines.append(f"## #{rank} {s['title']} {tag}")
+        md_lines.append(f"**Score: {e['final_score']}** (LLM: {e['llm_score']} | Peace: {e['peace_score']})")
         if e["disqualified"]:
-            lines.append(f"**Disqualified:** {e['disqualify_reason']}\n")
-        lines.append("| Field | Value |")
-        lines.append("|-------|-------|")
-        lines.append(f"| Rent | ₹{s['rent']:,} + ₹{s.get('maintenance') or 0:,} maintenance |")
-        lines.append(f"| Deposit | ₹{s['deposit']:,} |")
-        lines.append(f"| Area | {s['sqft']} sqft |")
-        lines.append(f"| Walk to PTP | {e['walk_minutes']} min |")
-        lines.append(f"| ORR Distance | {e['orr_distance_m']}m |")
-        lines.append(f"| Furnishing | {d.get('furnishing') or 'Unknown'} |")
-        lines.append(f"| Floor | {d.get('floor') or 'Unknown'} |")
-        lines.append(f"| Power Backup | {d.get('power_backup') or 'Unknown'} |")
-        lines.append(f"| Water Supply | {d.get('water_supply') or 'Unknown'} |")
-        lines.append(f"| Gated Security | {d.get('gated_security', 'Unknown')} |")
-        lines.append(f"\n**Assessment:** {e['llm_reasoning']}\n")
-        lines.append(f"**Link:** [{s['detail_url']}]({s['detail_url']})\n")
-        lines.append("---\n")
+            md_lines.append(f"**Disqualified:** {e['disqualify_reason']}")
+        md_lines.append(f"Rent: ₹{s['rent']:,} | Deposit: ₹{s['deposit']:,} | {s['sqft']}sqft | {e['walk_minutes']}min | {d.get('furnishing','?')} | Power: {d.get('power_backup','?')}")
+        md_lines.append(f"Assessment: {e['llm_reasoning']}")
+        md_lines.append(f"Link: {s['detail_url']}\n---\n")
+    md_path = ctx.path("report.md")
+    md_path.write_text("\n".join(md_lines))
 
-    report = "\n".join(lines)
-    ctx.path("report.md").write_text(report)
-    print(report)
-    return report
+    print(f"Reports: {html_path} + {md_path}", flush=True)
+    print(f"  {len(qualified)} qualified, {above} above {threshold}, {len(disqualified)} disqualified", flush=True)
+    return html_path
 
 
 def compare_runs(run_dir_a: Path, run_dir_b: Path) -> str:

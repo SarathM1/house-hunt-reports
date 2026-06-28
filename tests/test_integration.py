@@ -72,6 +72,7 @@ def test_full_pipeline_mocked(tmp_path):
 
     # Report
     from src.reporter import generate_report
-    report = generate_report(ctx)
-    assert "House Hunt Report" in report
+    html_path = generate_report(ctx)
+    assert ctx.path("report.html").exists()
     assert ctx.path("report.md").exists()
+    assert "House Hunt Report" in ctx.path("report.md").read_text()
