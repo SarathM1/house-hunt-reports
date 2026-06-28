@@ -17,11 +17,25 @@ def generate_report(ctx: RunContext) -> Path:
     scored_path = ctx.path("scored.json")
     entries = json.loads(scored_path.read_text())
 
+    # Load comparative result if exists
+    comp_path = ctx.path("comparative.json")
+    comparative = json.loads(comp_path.read_text()) if comp_path.exists() else None
+
     qualified = [e for e in entries if not e["disqualified"]]
     disqualified = [e for e in entries if e["disqualified"]]
-    qualified.sort(key=lambda x: x["final_score"], reverse=True)
+    qualified.sort(key=lambda x: x.get("comparative_rank") or 999)
     disqualified.sort(key=lambda x: x["final_score"], reverse=True)
     sorted_entries = qualified + disqualified
+
+    # Compute run averages for comparative context
+    if qualified:
+        all_criteria: dict[str, list] = {}
+        for e in qualified:
+            for k, v in e.get("criteria_scores", {}).items():
+                all_criteria.setdefault(k, []).append(v["score"])
+        criteria_averages = {k: round(sum(v) / len(v), 1) for k, v in all_criteria.items()}
+    else:
+        criteria_averages = {}
 
     threshold = config.score_threshold
     above = sum(1 for e in qualified if e["final_score"] >= threshold)
@@ -38,37 +52,57 @@ def generate_report(ctx: RunContext) -> Path:
         threshold=threshold,
         entries=sorted_entries,
         entries_json=json.dumps(sorted_entries),
+        criteria_averages_json=json.dumps(criteria_averages),
+        comparative_json=json.dumps(comparative) if comparative else "null",
     )
 
-    # HTML for humans
     html_path = ctx.path("report.html")
     html_path.write_text(html)
 
-    # GitHub Pages — per-run report
     reports_dir = REPO_ROOT / "reports" / ctx.run_id
     reports_dir.mkdir(parents=True, exist_ok=True)
     (reports_dir / "index.html").write_text(html)
 
-    # GitHub Pages — regenerate index listing all runs
     _regenerate_index(env)
 
-    # Markdown for LLM consumption
+    # Markdown report with structured data
     md_lines = [
         f"# House Hunt Report — {ctx.run_id}",
         f"\n**Config:** {config.name} | **Scored:** {len(entries)} | **Qualified:** {len(qualified)} | **Above {threshold}:** {above}\n",
-        "---\n",
     ]
+    if comparative:
+        md_lines.append(f"## Top Picks\n{comparative['top_3_summary']}\n")
+    md_lines.append("---\n")
+
     for rank, e in enumerate(sorted_entries, 1):
         s = e["summary"]
         d = e.get("detail") or {}
         tag = "DISQUALIFIED" if e["disqualified"] else ("ACT NOW" if e["final_score"] >= threshold else "")
         md_lines.append(f"## #{rank} {s['title']} {tag}")
         md_lines.append(f"**Score: {e['final_score']}** (LLM: {e['llm_score']} | Peace: {e['peace_score']})")
+
+        if e.get("elevator_pitch"):
+            md_lines.append(f"*{e['elevator_pitch']}*")
+
         if e["disqualified"]:
             md_lines.append(f"**Disqualified:** {e['disqualify_reason']}")
         md_lines.append(f"Rent: ₹{s['rent']:,} | Deposit: ₹{s['deposit']:,} | {s['sqft']}sqft | {e['walk_minutes']}min | {d.get('furnishing','?')} | Power: {d.get('power_backup','?')}")
-        md_lines.append(f"Assessment: {e.get('elevator_pitch', '')}")
+
+        if e.get("pros"):
+            md_lines.append("**Pros:** " + " · ".join(f"✓ {p}" for p in e["pros"]))
+        if e.get("cons"):
+            md_lines.append("**Cons:** " + " · ".join(f"✗ {c}" for c in e["cons"]))
+
+        if e.get("criteria_scores"):
+            scores_str = " | ".join(f"{k}: {v['score']}/{v['max']}" for k, v in e["criteria_scores"].items())
+            md_lines.append(f"Criteria: {scores_str}")
+
+        if e.get("peace_breakdown"):
+            pb = e["peace_breakdown"]
+            md_lines.append(f"Peace: ORR {pb['orr_distance_m']:.0f}m → base {pb['base_score']}, bonus +{pb['locality_bonus']} → {pb['final']}")
+
         md_lines.append(f"Link: {s['detail_url']}\n---\n")
+
     md_path = ctx.path("report.md")
     md_path.write_text("\n".join(md_lines))
 

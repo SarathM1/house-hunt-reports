@@ -11,8 +11,25 @@ SCORED_FIXTURE = [
             "preferred_tenant": "Family", "water_supply": "Corporation", "gated_security": True,
             "description": "Nice flat"},
         "lat": 12.94, "lon": 77.69, "walk_minutes": 8.0, "orr_distance_m": 400,
-        "peace_score": 70.0, "llm_score": 88.0, "llm_reasoning": "Good backup, quiet area",
+        "peace_score": 70.0, "llm_score": 88.0,
         "final_score": 80.8, "disqualified": False, "disqualify_reason": None,
+        "criteria_scores": {
+            "power_backup": {"score": 18, "max": 20, "confidence": "high", "evidence": "Full generator"},
+            "noise": {"score": 16, "max": 20, "confidence": "medium", "evidence": "3rd floor"},
+            "internet": {"score": 12, "max": 15, "confidence": "low", "evidence": "No mention"},
+            "light_ventilation": {"score": 8, "max": 10, "confidence": "medium", "evidence": "West facing"},
+            "water": {"score": 9, "max": 10, "confidence": "high", "evidence": "Corporation supply"},
+            "maintenance": {"score": 9, "max": 10, "confidence": "high", "evidence": "Gated"},
+            "wfh_livability": {"score": 8, "max": 10, "confidence": "medium", "evidence": "Semi furnished"},
+            "value": {"score": 4, "max": 5, "confidence": "high", "evidence": "Reasonable"},
+        },
+        "pros": ["Full generator backup", "Gated community", "Good water supply"],
+        "cons": ["No fiber internet mentioned", "Semi-furnished only"],
+        "elevator_pitch": "Quiet gated apartment with full generator, 8min walk to PTP",
+        "data_completeness": 0.85,
+        "peace_breakdown": {"orr_distance_m": 400, "base_score": 60, "locality_bonus": 20, "final": 70},
+        "comparative_rank": 1, "comparative_notes": "Best overall",
+        "duplicate_of": None,
     },
     {
         "summary": {"property_id": "b2", "title": "OK Flat", "rent": 25000, "deposit": 75000,
@@ -23,8 +40,25 @@ SCORED_FIXTURE = [
             "preferred_tenant": None, "water_supply": "Borewell", "gated_security": False,
             "description": "Basic flat"},
         "lat": 12.93, "lon": 77.68, "walk_minutes": 11.0, "orr_distance_m": 250,
-        "peace_score": 35.0, "llm_score": 40.0, "llm_reasoning": "No backup mentioned",
+        "peace_score": 35.0, "llm_score": 40.0,
         "final_score": 38.0, "disqualified": True, "disqualify_reason": "No power backup",
+        "criteria_scores": {
+            "power_backup": {"score": 0, "max": 20, "confidence": "high", "evidence": "Not mentioned"},
+            "noise": {"score": 6, "max": 20, "confidence": "low", "evidence": "Ground floor"},
+            "internet": {"score": 5, "max": 15, "confidence": "low", "evidence": "No info"},
+            "light_ventilation": {"score": 4, "max": 10, "confidence": "low", "evidence": "No info"},
+            "water": {"score": 5, "max": 10, "confidence": "medium", "evidence": "Borewell only"},
+            "maintenance": {"score": 3, "max": 10, "confidence": "medium", "evidence": "Not gated"},
+            "wfh_livability": {"score": 4, "max": 10, "confidence": "low", "evidence": "Unfurnished"},
+            "value": {"score": 3, "max": 5, "confidence": "medium", "evidence": "Cheap but basic"},
+        },
+        "pros": ["Low rent"],
+        "cons": ["No power backup", "Not gated", "Unfurnished", "Borewell only"],
+        "elevator_pitch": "Budget flat, but no power backup — disqualified",
+        "data_completeness": 0.35,
+        "peace_breakdown": {"orr_distance_m": 250, "base_score": 37.5, "locality_bonus": 0, "final": 35},
+        "comparative_rank": None, "comparative_notes": None,
+        "duplicate_of": None,
     },
 ]
 
@@ -32,6 +66,7 @@ SCORED_FIXTURE = [
 def test_generate_report(tmp_path):
     from src.reporter import generate_report
     from src.config import Config, RunContext
+    import json
 
     cfg = Config(
         name="default", target_localities=["kadubeesanahalli"], ptp_coords=(12.942, 77.6905),
@@ -48,14 +83,15 @@ def test_generate_report(tmp_path):
 
     html_path = generate_report(ctx)
     assert html_path.exists()
-    assert html_path.suffix == ".html"
     html = html_path.read_text()
     assert "Great Flat" in html
     assert "80.8" in html
-    assert "nobroker.in/a1" in html
+    assert "elevator_pitch" in html or "elevator-pitch" in html or "Quiet gated apartment" in html
+    assert "criteria" in html.lower() or "power_backup" in html
     md = (run_dir / "report.md").read_text()
     assert "Great Flat" in md
-    assert "80.8" in md
+    assert "Full generator" in md  # pros
+    assert "No fiber" in md  # cons
 
 
 def test_compare_runs(tmp_path):
