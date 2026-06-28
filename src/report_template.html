@@ -369,7 +369,7 @@ function render() {
   const sortBy = document.getElementById('f-sort').value;
   const minConf = document.getElementById('f-confidence').value;
 
-  document.getElementById('f-rent-val').textContent = maxRent >= 100000 ? '&#x20b9;1L+' : `&#x20b9;${(maxRent/1000).toFixed(0)}K`;
+  document.getElementById('f-rent-val').textContent = maxRent >= 100000 ? '₹1L+' : `₹${(maxRent/1000).toFixed(0)}K`;
   document.getElementById('f-travel-val').textContent = maxTravel;
   document.getElementById('f-sqft-val').textContent = minSqft === 0 ? 'Any' : minSqft;
 
