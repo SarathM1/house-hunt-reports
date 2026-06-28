@@ -67,7 +67,7 @@ def generate_report(ctx: RunContext) -> Path:
         if e["disqualified"]:
             md_lines.append(f"**Disqualified:** {e['disqualify_reason']}")
         md_lines.append(f"Rent: ₹{s['rent']:,} | Deposit: ₹{s['deposit']:,} | {s['sqft']}sqft | {e['walk_minutes']}min | {d.get('furnishing','?')} | Power: {d.get('power_backup','?')}")
-        md_lines.append(f"Assessment: {e['llm_reasoning']}")
+        md_lines.append(f"Assessment: {e.get('elevator_pitch', '')}")
         md_lines.append(f"Link: {s['detail_url']}\n---\n")
     md_path = ctx.path("report.md")
     md_path.write_text("\n".join(md_lines))
