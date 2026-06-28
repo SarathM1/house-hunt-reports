@@ -5,7 +5,7 @@ import anthropic
 
 from .config import RunContext
 from .db import Dedup
-from .models import CriteriaScore, ScoredListing
+from .models import ComparativeResult, CriteriaScore, RankingEntry, ScoredListing
 
 STRUCTURED_JUDGE_TEMPLATE = """You are evaluating a rental apartment listing for a hybrid worker near Prestige Tech Park, Bangalore.
 The tenant works remotely ~22 days/month from home, commutes to office only ~8 days/month.
@@ -155,6 +155,75 @@ def score_listing(
         return parse_structured_score(text, llm_weights)
 
 
+COMPARATIVE_TEMPLATE = """You are comparing rental apartments for a hybrid worker near Prestige Tech Park, Bangalore.
+
+Below are all qualified (non-disqualified) listings with their independent scores.
+Review them comparatively and produce a final ranking.
+
+LISTINGS:
+{listings_block}
+
+TASK:
+1. Rank all listings from best to worst for a WFH-heavy hybrid worker
+2. For each listing, explain in 1 sentence why it ranks where it does relative to the others
+3. Write a top_3_summary: a shareable 1-line-each summary of the top 3 picks
+
+Respond with ONLY valid JSON:
+{{"rankings": [{{"property_id": "<id>", "rank": <1-N>, "reasoning": "<1 sentence vs others>"}}], "top_3_summary": "<#1 Name — why. #2 Name — why. #3 Name — why.>"}}"""
+
+
+def build_comparative_prompt(scored_listings: list[dict]) -> str:
+    lines = []
+    for e in scored_listings:
+        s = e["summary"]
+        lines.append(f"- {s['property_id']}: {s['title']} | ₹{s['rent']:,} | {s.get('sqft', '?')}sqft | Score: {e['final_score']}")
+        lines.append(f"  LLM: {e['llm_score']} | Peace: {e['peace_score']}")
+        lines.append(f"  Pros: {', '.join(e.get('pros', []))}")
+        lines.append(f"  Cons: {', '.join(e.get('cons', []))}")
+        if e.get("criteria_scores"):
+            scores_str = ", ".join(f"{k}: {v['score']}/{v['max']}" for k, v in e["criteria_scores"].items())
+            lines.append(f"  Criteria: {scores_str}")
+    return COMPARATIVE_TEMPLATE.format(listings_block="\n".join(lines))
+
+
+def parse_comparative_result(text: str) -> ComparativeResult:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")
+    rankings = [RankingEntry(**r) for r in data.get("rankings", [])]
+    if not rankings:
+        raise ValueError("rankings must be non-empty")
+    return ComparativeResult(rankings=rankings, top_3_summary=data.get("top_3_summary", ""))
+
+
+def run_comparative_ranking(scored: list[dict]) -> ComparativeResult | None:
+    qualified = [e for e in scored if not e.get("disqualified")]
+    if len(qualified) < 2:
+        return None
+    client = anthropic.Anthropic()
+    prompt = build_comparative_prompt(qualified)
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = response.content[0].text.strip()
+    try:
+        return parse_comparative_result(text)
+    except ValueError as e:
+        retry_prompt = f"{prompt}\n\nYour previous response had an error: {e}\nPlease fix and respond with valid JSON only."
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": retry_prompt}],
+        )
+        return parse_comparative_result(response.content[0].text.strip())
+
+
 def run_score(ctx: RunContext) -> Path:
     config = ctx.config
     filtered_path = ctx.path("filtered.json")
@@ -219,4 +288,20 @@ def run_score(ctx: RunContext) -> Path:
     out_path = ctx.path("scored.json")
     out_path.write_text(json.dumps(scored, indent=2))
     print(f"Saved {len(scored)} scored listings to {out_path}")
+
+    # Pass 2: Comparative ranking
+    comparative = run_comparative_ranking(scored)
+    if comparative:
+        for ranking in comparative.rankings:
+            for entry in scored:
+                if entry["summary"]["property_id"] == ranking.property_id:
+                    entry["comparative_rank"] = ranking.rank
+                    entry["comparative_notes"] = ranking.reasoning
+                    break
+        out_path.write_text(json.dumps(scored, indent=2))
+        print(f"Comparative ranking: {comparative.top_3_summary[:100]}...")
+
+        comp_path = ctx.path("comparative.json")
+        comp_path.write_text(json.dumps(comparative.model_dump(), indent=2))
+
     return out_path

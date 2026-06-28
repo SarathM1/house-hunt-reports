@@ -88,3 +88,38 @@ def test_parse_structured_score_invalid():
     weights = {"power_backup": 20}
     with pytest.raises(ValueError):
         parse_structured_score("not json at all", weights)
+
+
+def test_build_comparative_prompt():
+    from src.scorer import build_comparative_prompt
+    listings = [
+        {"summary": {"property_id": "a1", "title": "Flat A", "rent": 30000, "sqft": 1000},
+         "llm_score": 82, "peace_score": 70, "final_score": 75,
+         "criteria_scores": {"power_backup": {"score": 18, "max": 20, "confidence": "high", "evidence": "Gen"}},
+         "pros": ["Good backup"], "cons": ["No fiber"], "disqualified": False},
+        {"summary": {"property_id": "b2", "title": "Flat B", "rent": 25000, "sqft": 900},
+         "llm_score": 75, "peace_score": 80, "final_score": 78,
+         "criteria_scores": {"power_backup": {"score": 15, "max": 20, "confidence": "medium", "evidence": "Partial"}},
+         "pros": ["Quiet area"], "cons": ["Smaller"], "disqualified": False},
+    ]
+    prompt = build_comparative_prompt(listings)
+    assert "a1" in prompt
+    assert "b2" in prompt
+    assert "rank" in prompt.lower()
+    assert "top_3_summary" in prompt
+
+
+def test_parse_comparative_result_valid():
+    from src.scorer import parse_comparative_result
+    raw = '{"rankings": [{"property_id": "a1", "rank": 1, "reasoning": "Best overall"}, {"property_id": "b2", "rank": 2, "reasoning": "Quieter"}], "top_3_summary": "#1 Flat A — best. #2 Flat B — quieter."}'
+    result = parse_comparative_result(raw)
+    assert len(result.rankings) == 2
+    assert result.rankings[0].rank == 1
+    assert result.top_3_summary.startswith("#1")
+
+
+def test_parse_comparative_result_invalid():
+    from src.scorer import parse_comparative_result
+    import pytest
+    with pytest.raises(ValueError):
+        parse_comparative_result("not json")
