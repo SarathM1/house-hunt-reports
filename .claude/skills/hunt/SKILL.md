@@ -5,9 +5,11 @@ description: Full house hunting pipeline — scrape → filter → score → rep
 
 # Full Hunt Pipeline
 
-Runs all stages in sequence. Skips spatial filter if GOOGLE_MAPS_API_KEY not set.
+Runs all stages in sequence.
 
 ## How to run
+
+### Stage 1 & 2: Scrape + Filter (Python)
 
 ```bash
 cd /Users/sarath.m/Documents/github/house_hunt
@@ -15,9 +17,7 @@ cd /Users/sarath.m/Documents/github/house_hunt
 from src.config import load_config, create_run, GOOGLE_MAPS_API_KEY
 from src.scraper import run_scrape
 from src.spatial import run_filter
-from src.scorer import run_score
-from src.reporter import generate_report
-import sys
+import sys, json
 
 profile = sys.argv[1] if len(sys.argv) > 1 else 'default'
 cfg = load_config(profile)
@@ -32,22 +32,22 @@ if GOOGLE_MAPS_API_KEY:
     run_filter(ctx)
 else:
     print('\n--- Stage 2: SKIPPED (no GOOGLE_MAPS_API_KEY) ---')
-    import shutil, json
-    from pathlib import Path
     raw = json.loads(ctx.path('raw.json').read_text())
     for e in raw:
         e.update({'lat': 0, 'lon': 0, 'walk_minutes': 0, 'orr_distance_m': 999, 'peace_score': 50})
     ctx.path('filtered.json').write_text(json.dumps(raw, indent=2))
 
-print('\n--- Stage 3: Score ---')
-run_score(ctx)
-
-print('\n--- Stage 4: Report ---')
-generate_report(ctx)
-
-print(f'\n=== Done: data/runs/{ctx.run_id}/ ===')
+print(f'\n=== Scrape + Filter done: data/runs/{ctx.run_id}/ ===')
 " ${CONFIG:-default}
 ```
+
+### Stage 3: Score (Claude Code as judge)
+
+After stages 1-2 complete, invoke the `/score` skill with the run_id from above. Claude Code reads filtered.json and scores each listing directly — no API key needed.
+
+### Stage 4: Report
+
+After scoring, invoke the `/report` skill with the same run_id.
 
 ## After the hunt
 

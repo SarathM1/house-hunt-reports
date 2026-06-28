@@ -1,37 +1,70 @@
 ---
 name: score
-description: Score filtered listings using Claude Sonnet as LLM judge — evaluates power backup (hard req), noise, internet, water, maintenance, WFH livability. Use when the user says "score", "evaluate", "judge", or wants AI assessment.
+description: Score filtered listings as LLM judge — evaluates power backup (hard req), noise, internet, water, maintenance, WFH livability. Use when the user says "score", "evaluate", "judge", or wants AI assessment.
 ---
 
-# LLM Scoring
+# LLM Scoring (Claude Code as Judge)
 
-## What it does
-
-1. Sends each listing to Claude Sonnet with 8-criteria weighted prompt
-2. Hard disqualify if no 100% power backup
-3. Computes final_score = peace_weight * peace_score + llm_weight * llm_score
+Score listings directly in Claude Code — no API key needed, uses your Max plan.
 
 ## How to run
 
-Requires a run_id with `filtered.json`. Then:
+1. Find the latest run:
 ```bash
-cd /Users/sarath.m/Documents/github/house_hunt
-.venv/bin/python -c "
-from src.config import Config, RunContext
-from src.scorer import run_score
-from pathlib import Path
-import json, sys
-
-run_id = sys.argv[1]
-run_dir = Path('data/runs') / run_id
-cfg = Config(**json.loads((run_dir / 'config.json').read_text()))
-ctx = RunContext(run_id=run_id, run_dir=run_dir, config=cfg)
-run_score(ctx)
-" ${RUN_ID}
+ls -t data/runs/ | head -1
 ```
 
-Requires `ANTHROPIC_API_KEY` env var.
+2. Read the filtered listings:
+```bash
+cat data/runs/{RUN_ID}/filtered.json
+```
+
+3. Read the config to get scoring weights:
+```bash
+cat data/runs/{RUN_ID}/config.json
+```
+
+4. For EACH listing in `filtered.json`, evaluate against these criteria and produce a score:
+
+**HARD REQUIREMENT — 100% power backup:**
+If `detail.power_backup` is missing, null, "None", "No", partial, or inverter-only → `disqualified: true`.
+
+**Scoring criteria (0-100 total):**
+
+| Criteria | Weight | What to check |
+|----------|--------|---------------|
+| Power backup quality & coverage | `llm_weights.power_backup` pts | Generator vs inverter, full vs partial, explicit mention in description |
+| Noise insulation / peaceful environment | `llm_weights.noise` pts | Description signals, floor level, facing away from road, inner layout |
+| Internet/connectivity infrastructure | `llm_weights.internet` pts | Fiber-ready, broadband mentions, ACT/Airtel in description |
+| Natural light, ventilation, floor level | `llm_weights.light_ventilation` pts | Facing, balconies count, mid-floor (2-4) preference |
+| Water supply reliability | `llm_weights.water` pts | Corporation + borewell + sump > borewell-only |
+| Building maintenance & security | `llm_weights.maintenance` pts | Gated community, managed maintenance, security staff |
+| WFH livability (space, furnishing) | `llm_weights.wfh_livability` pts | Room for desk, semi/fully furnished, quiet layout |
+| Value for money | `llm_weights.value` pts | Rent vs sqft vs amenities ratio |
+
+5. Compute final score:
+```
+final_score = (config.score_weights.peace * peace_score) + (config.score_weights.llm * llm_score)
+```
+
+6. Write results to `data/runs/{RUN_ID}/scored.json` as a JSON array. Each entry:
+```json
+{
+  "summary": { ... },
+  "detail": { ... },
+  "lat": ..., "lon": ...,
+  "walk_minutes": ..., "orr_distance_m": ...,
+  "peace_score": ...,
+  "llm_score": <your 0-100 score>,
+  "llm_reasoning": "<2-3 sentence explanation>",
+  "final_score": <weighted combo>,
+  "disqualified": <true|false>,
+  "disqualify_reason": "<reason or null>"
+}
+```
+
+Write the file using the Write tool — do NOT use Python scripts or API calls.
 
 ## After scoring
 
-Report scores. Suggest `/report` to see ranked output.
+Present scores to user. Run `/report` to generate ranked report.
