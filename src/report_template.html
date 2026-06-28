@@ -13,6 +13,12 @@
   .top-bar .meta { font-size: 12px; color: #aaa; }
   .top-bar .meta span { color: #4ecdc4; font-weight: 600; }
 
+  .comp-banner { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 16px 20px; display: none; }
+  .comp-banner.visible { display: block; }
+  .comp-banner h2 { font-size: 15px; margin-bottom: 8px; color: #4ecdc4; }
+  .comp-banner .pick { font-size: 13px; line-height: 1.6; color: #ddd; }
+  .comp-banner .pick strong { color: #fff; }
+
   .controls { background: #fff; padding: 12px 20px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 99; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
   .control-group { display: flex; flex-direction: column; gap: 2px; }
   .control-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
@@ -33,9 +39,9 @@
   .card.disqualified { border-left-color: #ccc; opacity: 0.5; }
   .card.hidden { display: none; }
 
-  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; min-width: 0; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; min-width: 0; }
   .card-top h2 { font-size: 15px; flex: 1; line-height: 1.3; min-width: 0; }
-  .card-top h2 a { color: #1a1a2e; text-decoration: none; overflow-wrap: break-word; word-wrap: break-word; }
+  .card-top h2 a { color: #1a1a2e; text-decoration: none; overflow-wrap: break-word; }
   .card-top h2 a:hover { color: #4ecdc4; }
   .rank { color: #aaa; font-size: 13px; margin-right: 6px; }
   .score { background: #1a1a2e; color: #fff; padding: 3px 10px; border-radius: 16px; font-size: 13px; font-weight: 600; white-space: nowrap; margin-left: 10px; flex-shrink: 0; }
@@ -44,22 +50,54 @@
   .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 6px; vertical-align: middle; }
   .tag.act { background: #ffe0e0; color: #d32f2f; }
   .tag.disq { background: #eee; color: #888; }
+  .tag.dupe { background: #fff3e0; color: #e65100; }
+
+  .elevator-pitch { font-size: 13px; font-style: italic; color: #555; margin-bottom: 10px; font-weight: 500; }
+
+  .badges { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .badge.completeness-full { background: #e8f5e9; color: #2e7d32; }
+  .badge.completeness-partial { background: #fff8e1; color: #f57f17; }
+  .badge.completeness-sparse { background: #fce4ec; color: #c62828; }
+  .badge.standout { background: #e8f5e9; color: #2e7d32; }
+  .badge.watchout { background: #fce4ec; color: #c62828; }
 
   .props { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 16px; margin-bottom: 8px; }
   .prop { font-size: 12px; }
   .prop .k { color: #999; }
   .prop .v { font-weight: 500; }
 
+  .criteria-chart { margin: 10px 0; }
+  .criteria-row { display: flex; align-items: center; margin-bottom: 4px; font-size: 12px; }
+  .criteria-label { width: 110px; color: #666; flex-shrink: 0; text-transform: capitalize; }
+  .criteria-bar-container { flex: 1; height: 16px; background: #f0f0f0; border-radius: 8px; position: relative; margin: 0 8px; }
+  .criteria-bar-fill { height: 100%; border-radius: 8px; transition: width 0.3s; }
+  .criteria-bar-fill.green { background: #4ecdc4; }
+  .criteria-bar-fill.yellow { background: #ffd93d; }
+  .criteria-bar-fill.red { background: #ff6b6b; }
+  .criteria-avg-marker { position: absolute; top: -2px; bottom: -2px; width: 2px; background: rgba(0,0,0,0.25); border-radius: 1px; }
+  .criteria-score-text { width: 45px; text-align: right; font-weight: 600; flex-shrink: 0; }
+  .criteria-confidence { width: 36px; text-align: center; flex-shrink: 0; font-size: 10px; letter-spacing: -1px; }
+  .criteria-evidence { display: none; font-size: 11px; color: #888; padding: 2px 0 2px 118px; }
+  .criteria-row:hover + .criteria-evidence, .criteria-evidence:hover { display: block; }
+  .criteria-row.expandable { cursor: pointer; }
+
+  .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .pros-cons ul { list-style: none; padding: 0; }
+  .pros-cons li { font-size: 12px; padding: 2px 0; line-height: 1.4; }
+  .pros-cons .pro-list li::before { content: "✓ "; color: #2e7d32; font-weight: bold; }
+  .pros-cons .con-list li::before { content: "✗ "; color: #c62828; font-weight: bold; }
+  .pros-cons h4 { font-size: 11px; text-transform: uppercase; color: #888; margin-bottom: 4px; letter-spacing: 0.5px; }
+
+  .peace-detail { font-size: 11px; color: #888; margin: 4px 0; }
+
   .images { display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .images img { height: 120px; border-radius: 6px; object-fit: cover; cursor: pointer; flex-shrink: 0; }
   .images img:hover { opacity: 0.8; }
-  .reasoning { font-size: 12px; color: #666; line-height: 1.4; padding: 8px 10px; background: #f9f9f9; border-radius: 5px; margin-top: 6px; overflow-wrap: break-word; }
   .disq-reason { color: #d32f2f; font-weight: 500; font-size: 12px; margin-bottom: 6px; }
   .lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; cursor: pointer; }
   .lightbox.active { display: flex; }
   .lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px; }
-
-  .sort-active { background: #4ecdc4 !important; color: #fff !important; border-color: #4ecdc4 !important; }
 
   .filter-toggle { display: none; }
 
@@ -72,7 +110,7 @@
     .filter-toggle .ft-arrow { font-size: 12px; color: #888; transition: transform 0.2s; }
     .filter-toggle.open .ft-arrow { transform: rotate(180deg); }
     .controls { padding: 10px 16px; gap: 6px; flex-direction: column; align-items: stretch; position: sticky; top: 42px; max-height: 0; overflow: hidden; padding: 0 16px; border-bottom: none; transition: max-height 0.25s ease, padding 0.25s ease; }
-    .controls.open { max-height: 500px; padding: 10px 16px; border-bottom: 1px solid #e0e0e0; }
+    .controls.open { max-height: 600px; padding: 10px 16px; border-bottom: 1px solid #e0e0e0; }
     .control-group { width: 100%; }
     .control-group input[type=range] { flex: 1; width: auto; }
     .toggle { justify-content: flex-start; }
@@ -81,8 +119,9 @@
     .card-top { flex-direction: column; gap: 6px; }
     .score { align-self: flex-start; margin-left: 0; }
     .props { grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+    .pros-cons { grid-template-columns: 1fr; }
+    .criteria-label { width: 80px; font-size: 11px; }
     .images img { height: 100px; }
-    .reasoning { font-size: 13px; }
     .result-count { margin-left: 0; }
     .toggle label { font-size: 14px; }
   }
@@ -99,6 +138,8 @@
   </div>
 </div>
 
+<div class="comp-banner" id="comp-banner"></div>
+
 <div class="filter-toggle" id="filter-toggle" onclick="this.classList.toggle('open');document.getElementById('controls').classList.toggle('open')">
   <span class="ft-label">Filters</span>
   <span class="ft-count" id="ft-count"></span>
@@ -109,7 +150,7 @@
     <label>Max Rent</label>
     <div style="display:flex;align-items:center;gap:6px;">
       <input type="range" id="f-rent" min="5000" max="100000" step="1000" value="100000">
-      <span class="range-val" id="f-rent-val">₹1L</span>
+      <span class="range-val" id="f-rent-val">&#x20b9;1L</span>
     </div>
   </div>
   <div class="control-group">
@@ -137,11 +178,25 @@
   <div class="control-group">
     <label>Sort By</label>
     <select id="f-sort">
-      <option value="score">Score</option>
+      <option value="score">Final Score</option>
+      <option value="rank">Comparative Rank</option>
       <option value="rent">Rent (low)</option>
       <option value="travel">Travel (short)</option>
       <option value="sqft">Area (big)</option>
-      <option value="value">₹/sqft (low)</option>
+      <option value="value">&#x20b9;/sqft (low)</option>
+      <option value="power_backup">Power Backup</option>
+      <option value="noise">Noise/Peace</option>
+      <option value="internet">Internet</option>
+      <option value="wfh_livability">WFH Livability</option>
+      <option value="water">Water Supply</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Min Confidence</label>
+    <select id="f-confidence">
+      <option value="any">Any</option>
+      <option value="medium">Medium+</option>
+      <option value="high">High only</option>
     </select>
   </div>
   <div class="control-group toggle">
@@ -155,6 +210,10 @@
   <div class="control-group toggle">
     <input type="checkbox" id="f-hide-disq" checked>
     <label for="f-hide-disq">Hide disqualified</label>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-hide-dupes" checked>
+    <label for="f-hide-dupes">Hide duplicates</label>
   </div>
   <div class="result-count" id="result-count"></div>
 </div>
@@ -170,27 +229,107 @@
 <script>
 const DATA = {{ entries_json }};
 const THRESHOLD = {{ threshold }};
+const CRITERIA_AVERAGES = {{ criteria_averages_json }};
+const COMPARATIVE = {{ comparative_json }};
 
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+const CONF_ORDER = {high: 3, medium: 2, low: 1};
+const CONF_DOTS = {high: '&#9679;&#9679;&#9679;', medium: '&#9679;&#9679;&#9675;', low: '&#9679;&#9675;&#9675;'};
+const CONF_COLORS = {high: '#2e7d32', medium: '#f57f17', low: '#999'};
+
+function barColor(score, max) {
+  const pct = score / max;
+  if (pct >= 0.8) return 'green';
+  if (pct >= 0.5) return 'yellow';
+  return 'red';
+}
+
+function completenessLabel(dc) {
+  if (dc >= 0.7) return {cls: 'full', text: 'Full data'};
+  if (dc >= 0.4) return {cls: 'partial', text: 'Partial data'};
+  return {cls: 'sparse', text: 'Sparse data'};
+}
+
+function criteriaChart(cs, avgs) {
+  if (!cs) return '';
+  let rows = '';
+  for (const [key, val] of Object.entries(cs)) {
+    const pct = (val.score / val.max * 100).toFixed(0);
+    const color = barColor(val.score, val.max);
+    const avg = avgs[key];
+    const avgPct = avg ? (avg / val.max * 100).toFixed(0) : null;
+    const avgMarker = avgPct ? `<div class="criteria-avg-marker" style="left:${avgPct}%" title="Avg: ${avg}"></div>` : '';
+    const label = key.replace(/_/g, ' ');
+    rows += `<div class="criteria-row expandable">
+      <span class="criteria-label">${label}</span>
+      <div class="criteria-bar-container">
+        <div class="criteria-bar-fill ${color}" style="width:${pct}%"></div>
+        ${avgMarker}
+      </div>
+      <span class="criteria-score-text">${val.score}/${val.max}</span>
+      <span class="criteria-confidence" style="color:${CONF_COLORS[val.confidence]}" title="${val.confidence} confidence">${CONF_DOTS[val.confidence] || ''}</span>
+    </div>
+    <div class="criteria-evidence">${esc(val.evidence)}</div>`;
+  }
+  return `<div class="criteria-chart">${rows}</div>`;
+}
+
+function prosCons(pros, cons) {
+  if ((!pros || !pros.length) && (!cons || !cons.length)) return '';
+  const proHtml = pros && pros.length ? `<div class="pro-list"><h4>Strengths</h4><ul>${pros.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : '';
+  const conHtml = cons && cons.length ? `<div class="con-list"><h4>Weaknesses</h4><ul>${cons.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : '';
+  return `<div class="pros-cons">${proHtml}${conHtml}</div>`;
+}
+
+function badgesHtml(e) {
+  let html = '';
+  const dc = e.data_completeness;
+  if (dc != null) {
+    const cl = completenessLabel(dc);
+    html += `<span class="badge completeness-${cl.cls}">${cl.text} (${Math.round(dc*100)}%)</span>`;
+  }
+  if (e.criteria_scores) {
+    for (const [key, val] of Object.entries(e.criteria_scores)) {
+      const pct = val.score / val.max;
+      if (pct >= 0.9) html += `<span class="badge standout">&#9733; ${key.replace(/_/g,' ')}</span>`;
+      else if (pct < 0.4) html += `<span class="badge watchout">&#9888; ${key.replace(/_/g,' ')}</span>`;
+    }
+  }
+  return html ? `<div class="badges">${html}</div>` : '';
+}
+
+function peaceDetail(pb) {
+  if (!pb) return '';
+  const bonus = pb.locality_bonus > 0 ? ` + bonus ${pb.locality_bonus}` : '';
+  return `<div class="peace-detail">Peace: ORR ${Math.round(pb.orr_distance_m)}m &#8594; base ${pb.base_score}${bonus} &#8594; ${pb.final}</div>`;
+}
 
 function makeCard(e, rank) {
   const s = e.summary, d = e.detail || {};
   const isDisq = e.disqualified;
+  const isDupe = !!e.duplicate_of;
   const isAct = e.final_score >= THRESHOLD && !isDisq;
   const cls = isAct ? 'act-now' : (isDisq ? 'disqualified' : 'qualified');
-  const tagHtml = isAct ? '<span class="tag act">Act Now</span>' : (isDisq ? '<span class="tag disq">DQ</span>' : '');
+  let tagHtml = isAct ? '<span class="tag act">Act Now</span>' : (isDisq ? '<span class="tag disq">DQ</span>' : '');
+  if (isDupe) tagHtml += `<span class="tag dupe">Duplicate</span>`;
+  if (e.comparative_rank && e.comparative_rank <= 3) tagHtml += `<span class="tag act">#${e.comparative_rank} Pick</span>`;
   const scoreClass = isAct ? 'high' : (isDisq ? 'disq' : '');
   const totalRent = s.rent + (s.maintenance || 0);
 
-  return `<div class="card ${cls}" data-rent="${totalRent}" data-travel="${e.walk_minutes}" data-sqft="${s.sqft}" data-score="${e.final_score}" data-furn="${d.furnishing || ''}" data-power="${d.power_backup || ''}" data-gated="${d.gated_security}" data-disq="${isDisq}" data-value="${s.sqft > 0 ? (totalRent/s.sqft).toFixed(1) : 999}">
+  const minConf = Math.min(...Object.values(e.criteria_scores || {}).map(v => CONF_ORDER[v.confidence] || 0));
+
+  return `<div class="card ${cls}" data-rent="${totalRent}" data-travel="${e.walk_minutes}" data-sqft="${s.sqft}" data-score="${e.final_score}" data-furn="${d.furnishing || ''}" data-power="${d.power_backup || ''}" data-gated="${d.gated_security}" data-disq="${isDisq}" data-dupe="${isDupe}" data-value="${s.sqft > 0 ? (totalRent/s.sqft).toFixed(1) : 999}" data-rank="${e.comparative_rank || 999}" data-min-conf="${minConf}" ${Object.entries(e.criteria_scores||{}).map(([k,v]) => `data-cs-${k}="${v.score}"`).join(' ')}>
     <div class="card-top">
       <h2><span class="rank">#${rank}</span><a href="${s.detail_url}" target="_blank">${esc(s.title)}</a>${tagHtml}</h2>
       <span class="score ${scoreClass}">${e.final_score}</span>
     </div>
-    ${isDisq ? `<div class="disq-reason">${e.disqualify_reason}</div>` : ''}
+    ${e.elevator_pitch ? `<div class="elevator-pitch">${esc(e.elevator_pitch)}</div>` : ''}
+    ${isDisq ? `<div class="disq-reason">${esc(e.disqualify_reason)}</div>` : ''}
+    ${badgesHtml(e)}
     <div class="props">
-      <div class="prop"><span class="k">Rent </span><span class="v">₹${totalRent.toLocaleString('en-IN')}</span></div>
-      <div class="prop"><span class="k">Deposit </span><span class="v">₹${s.deposit.toLocaleString('en-IN')}</span></div>
+      <div class="prop"><span class="k">Rent </span><span class="v">&#x20b9;${totalRent.toLocaleString('en-IN')}</span></div>
+      <div class="prop"><span class="k">Deposit </span><span class="v">&#x20b9;${s.deposit.toLocaleString('en-IN')}</span></div>
       <div class="prop"><span class="k">Area </span><span class="v">${s.sqft} sqft</span></div>
       <div class="prop"><span class="k">Travel </span><span class="v">${e.walk_minutes} min</span></div>
       <div class="prop"><span class="k">ORR </span><span class="v">${Math.round(e.orr_distance_m)}m</span></div>
@@ -199,13 +338,23 @@ function makeCard(e, rank) {
       <div class="prop"><span class="k">Power </span><span class="v">${d.power_backup || '?'}</span></div>
       <div class="prop"><span class="k">Water </span><span class="v">${d.water_supply || '?'}</span></div>
       <div class="prop"><span class="k">Security </span><span class="v">${d.gated_security === true ? 'Yes' : (d.gated_security === false ? 'No' : '?')}</span></div>
-      <div class="prop"><span class="k">₹/sqft </span><span class="v">${s.sqft > 0 ? (totalRent/s.sqft).toFixed(0) : '?'}</span></div>
+      <div class="prop"><span class="k">&#x20b9;/sqft </span><span class="v">${s.sqft > 0 ? (totalRent/s.sqft).toFixed(0) : '?'}</span></div>
       <div class="prop"><span class="k">LLM </span><span class="v">${e.llm_score}</span></div>
       <div class="prop"><span class="k">Peace </span><span class="v">${e.peace_score}</span></div>
     </div>
+    ${criteriaChart(e.criteria_scores, CRITERIA_AVERAGES)}
+    ${prosCons(e.pros, e.cons)}
+    ${peaceDetail(e.peace_breakdown)}
+    ${e.comparative_notes ? `<div class="peace-detail"><strong>vs others:</strong> ${esc(e.comparative_notes)}</div>` : ''}
     ${s.image_urls && s.image_urls.length > 0 && s.image_urls[0].includes('images.nobroker.in') ? `<div class="images">${s.image_urls.map(u => `<img src="${u}" loading="lazy" onclick="event.stopPropagation();document.getElementById('lightbox-img').src='${u}';document.getElementById('lightbox').classList.add('active')">`).join('')}</div>` : ''}
-    ${e.llm_reasoning ? `<div class="reasoning">${esc(e.llm_reasoning)}</div>` : ''}
   </div>`;
+}
+
+function renderBanner() {
+  const el = document.getElementById('comp-banner');
+  if (!COMPARATIVE || !COMPARATIVE.top_3_summary) return;
+  el.innerHTML = `<h2>Top Picks</h2><div class="pick">${esc(COMPARATIVE.top_3_summary).replace(/#(\d)/g, '<strong>#$1</strong>')}</div>`;
+  el.classList.add('visible');
 }
 
 function render() {
@@ -216,27 +365,42 @@ function render() {
   const powerOnly = document.getElementById('f-power').checked;
   const gatedOnly = document.getElementById('f-gated').checked;
   const hideDisq = document.getElementById('f-hide-disq').checked;
+  const hideDupes = document.getElementById('f-hide-dupes').checked;
   const sortBy = document.getElementById('f-sort').value;
+  const minConf = document.getElementById('f-confidence').value;
 
-  document.getElementById('f-rent-val').textContent = maxRent >= 100000 ? '₹1L+' : `₹${(maxRent/1000).toFixed(0)}K`;
+  document.getElementById('f-rent-val').textContent = maxRent >= 100000 ? '&#x20b9;1L+' : `&#x20b9;${(maxRent/1000).toFixed(0)}K`;
   document.getElementById('f-travel-val').textContent = maxTravel;
   document.getElementById('f-sqft-val').textContent = minSqft === 0 ? 'Any' : minSqft;
+
+  const confMin = minConf === 'high' ? 3 : (minConf === 'medium' ? 2 : 0);
 
   let filtered = DATA.filter(e => {
     const s = e.summary, d = e.detail || {};
     const totalRent = s.rent + (s.maintenance || 0);
     if (hideDisq && e.disqualified) return false;
+    if (hideDupes && e.duplicate_of) return false;
     if (totalRent > maxRent && maxRent < 100000) return false;
     if (e.walk_minutes > maxTravel) return false;
     if (s.sqft < minSqft) return false;
     if (furn !== 'all' && (d.furnishing || '') !== furn) return false;
     if (powerOnly && !d.power_backup) return false;
     if (gatedOnly && d.gated_security !== true) return false;
+    if (confMin > 0 && e.criteria_scores) {
+      const worst = Math.min(...Object.values(e.criteria_scores).map(v => CONF_ORDER[v.confidence] || 0));
+      if (worst < confMin) return false;
+    }
     return true;
   });
 
+  const csSort = (key) => (a, b) => {
+    const sa = a.criteria_scores && a.criteria_scores[key] ? a.criteria_scores[key].score : 0;
+    const sb = b.criteria_scores && b.criteria_scores[key] ? b.criteria_scores[key].score : 0;
+    return sb - sa;
+  };
   const sorters = {
     score: (a, b) => b.final_score - a.final_score,
+    rank: (a, b) => (a.comparative_rank || 999) - (b.comparative_rank || 999),
     rent: (a, b) => (a.summary.rent + (a.summary.maintenance||0)) - (b.summary.rent + (b.summary.maintenance||0)),
     travel: (a, b) => a.walk_minutes - b.walk_minutes,
     sqft: (a, b) => b.summary.sqft - a.summary.sqft,
@@ -244,7 +408,12 @@ function render() {
       const va = a.summary.sqft > 0 ? (a.summary.rent + (a.summary.maintenance||0))/a.summary.sqft : 999;
       const vb = b.summary.sqft > 0 ? (b.summary.rent + (b.summary.maintenance||0))/b.summary.sqft : 999;
       return va - vb;
-    }
+    },
+    power_backup: csSort('power_backup'),
+    noise: csSort('noise'),
+    internet: csSort('internet'),
+    wfh_livability: csSort('wfh_livability'),
+    water: csSort('water'),
   };
   filtered.sort(sorters[sortBy] || sorters.score);
 
@@ -257,6 +426,7 @@ function render() {
 
 document.getElementById('controls').addEventListener('input', render);
 document.getElementById('controls').addEventListener('change', render);
+renderBanner();
 render();
 </script>
 </body>
