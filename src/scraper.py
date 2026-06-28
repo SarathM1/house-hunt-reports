@@ -1,30 +1,31 @@
-"""Scrape NoBroker listings via Firecrawl cloud API."""
 import json
 import re
 import time
-from datetime import date
 from pathlib import Path
 
-import requests
+import httpx
 
-from .config import FIRECRAWL_API_KEY, RAW_DIR, TARGET_LOCALITIES
-from .models import ListingSummary
+from .config import FIRECRAWL_API_KEY, RunContext
+from .db import Dedup
+from .models import ListingDetail, ListingSummary
 
 FIRECRAWL_URL = "https://api.firecrawl.dev/v1/scrape"
-HEADERS = {
-    "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
-    "Content-Type": "application/json",
-}
-
 SEO_URL_TEMPLATE = "https://www.nobroker.in/2bhk-flats-for-rent-in-{locality}_bangalore"
 
 
-def scrape_seo_page(locality: str) -> str:
-    """Scrape a NoBroker SEO listing page, return markdown."""
+def _firecrawl_headers(api_key: str) -> dict:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+
+def scrape_seo_page(locality: str, api_key: str = "") -> str:
+    api_key = api_key or FIRECRAWL_API_KEY
     url = SEO_URL_TEMPLATE.format(locality=locality)
-    resp = requests.post(
+    resp = httpx.post(
         FIRECRAWL_URL,
-        headers=HEADERS,
+        headers=_firecrawl_headers(api_key),
         json={"url": url, "formats": ["markdown"], "waitFor": 5000},
         timeout=120,
     )
@@ -35,69 +36,76 @@ def scrape_seo_page(locality: str) -> str:
     return data["data"]["markdown"]
 
 
-def parse_listings_from_markdown(md: str, source_locality: str) -> list[ListingSummary]:
-    """Extract listing summaries from NoBroker SEO page markdown."""
-    listings = []
-    detail_urls = re.findall(
-        r'(https://www\.nobroker\.in/property/[^\s\)\]"]+/detail)', md
-    )
-    # ponytail: regex parsing — upgrade to proper HTML parser if markdown format changes
-    blocks = re.split(r'##\s+\[', md)
-    for block in blocks[1:]:  # skip preamble
-        try:
-            title_match = re.match(r'(.+?)\]\((https://www\.nobroker\.in/property/[^\)]+)\)', block)
-            if not title_match:
-                continue
-
-            title = title_match.group(1).strip()
-            url = title_match.group(2).strip()
-
-            rent = _extract_amount(block, r'₹\s*([\d,]+)')
-            maintenance = _extract_amount(block, r'₹\s*([\d,]+)\s*Maintenance')
-            deposit = _extract_amount(block, r'₹([\d,]+)\s*\n.*Deposit|₹([\d,]+)\s*$', multi_line=True)
-            sqft = _extract_int(block, r'([\d,]+)\s*sqft')
-
-            address_match = re.search(r'(?:Layout|Road|Rd|Cross|Main|Near|Opp)[^₹\n]{5,100}', block)
-            address = address_match.group(0).strip() if address_match else ""
-
-            listings.append(ListingSummary(
-                title=title,
-                url=url,
-                rent=rent,
-                maintenance=maintenance,
-                deposit=deposit,
-                sqft=sqft,
-                address=address,
-                locality=source_locality,
-                source_locality=source_locality,
-            ))
-        except Exception:
-            continue
-
-    return listings
+def _extract_property_id(url: str) -> str:
+    parts = url.rstrip("/").split("/")
+    if parts[-1] == "detail":
+        return parts[-2].split("-")[-1]
+    return parts[-1].split("-")[-1]
 
 
-def _extract_amount(text: str, pattern: str, multi_line: bool = False) -> int:
-    flags = re.MULTILINE if multi_line else 0
-    match = re.search(pattern, text, flags)
-    if not match:
-        return 0
-    raw = match.group(1) if match.group(1) else (match.group(2) if match.lastindex and match.lastindex >= 2 else "0")
-    return int(raw.replace(",", "")) if raw else 0
-
-
-def _extract_int(text: str, pattern: str) -> int:
+def _extract_amount(text: str, pattern: str) -> int:
     match = re.search(pattern, text)
     if not match:
         return 0
-    return int(match.group(1).replace(",", ""))
+    raw = match.group(1) if match.group(1) else "0"
+    return int(raw.replace(",", "")) if raw else 0
 
 
-def scrape_detail_page(url: str) -> str:
-    """Scrape individual listing detail page, return markdown."""
-    resp = requests.post(
+def parse_listings_from_markdown(md: str, source_locality: str) -> list[ListingSummary]:
+    listings = []
+    blocks = re.split(r"##\s+\[", md)
+    for block in blocks[1:]:
+        try:
+            title_match = re.match(
+                r"(.+?)\]\((https://www\.nobroker\.in/property/[^\)]+)\)", block
+            )
+            if not title_match:
+                continue
+            title = title_match.group(1).strip()
+            url = title_match.group(2).strip()
+            property_id = _extract_property_id(url)
+            rent = _extract_amount(block, r"₹\s*([\d,]+)")
+            maintenance = _extract_amount(block, r"₹\s*([\d,]+)\s*Maintenance")
+            deposit = _extract_amount(block, r"₹\s*([\d,]+)\s*Deposit")
+            sqft = _extract_amount(block, r"([\d,]+)\s*sqft")
+
+            address_match = re.search(
+                r"([^\n]*\b(?:Layout|Road|Rd|Cross|Main|Near|Opp|Gear|Sector)\b[^\n]*)",
+                block,
+            )
+            address = address_match.group(1).strip() if address_match else ""
+
+            date_match = re.search(r"(\d{4}-\d{2}-\d{2})", block)
+            available_date = date_match.group(1) if date_match else None
+
+            image_urls = re.findall(r"!\[.*?\]\((https://[^\)]+)\)", block)
+
+            listings.append(
+                ListingSummary(
+                    property_id=property_id,
+                    title=title,
+                    rent=rent,
+                    deposit=deposit,
+                    maintenance=maintenance if maintenance else None,
+                    sqft=sqft,
+                    address=address,
+                    locality=source_locality,
+                    building_name=None,
+                    detail_url=url,
+                    available_date=available_date,
+                    image_urls=image_urls,
+                )
+            )
+        except Exception:
+            continue
+    return listings
+
+
+def scrape_detail_page(url: str, api_key: str = "") -> str:
+    api_key = api_key or FIRECRAWL_API_KEY
+    resp = httpx.post(
         FIRECRAWL_URL,
-        headers=HEADERS,
+        headers=_firecrawl_headers(api_key),
         json={"url": url, "formats": ["markdown"], "waitFor": 5000},
         timeout=120,
     )
@@ -108,42 +116,88 @@ def scrape_detail_page(url: str) -> str:
     return data["data"]["markdown"]
 
 
-def scrape_all_localities() -> list[ListingSummary]:
-    """Scrape all target localities, return combined listings."""
-    all_listings = []
-    seen_urls = set()
+def _extract_table_value(md: str, key: str) -> str | None:
+    pattern = rf"\|\s*{re.escape(key)}\s*\|\s*(.+?)\s*\|"
+    match = re.search(pattern, md, re.IGNORECASE)
+    return match.group(1).strip() if match else None
 
-    for locality in TARGET_LOCALITIES:
+
+def parse_detail_from_markdown(md: str, property_id: str) -> ListingDetail:
+    furnishing = _extract_table_value(md, "Furnishing") or ""
+    floor = _extract_table_value(md, "Floor") or ""
+    power_backup = _extract_table_value(md, "Power Backup")
+    facing = _extract_table_value(md, "Facing")
+    parking = _extract_table_value(md, "Parking")
+    building_age = _extract_table_value(md, "Age of Building")
+    preferred_tenant = _extract_table_value(md, "Preferred Tenant")
+    water_supply = _extract_table_value(md, "Water Supply")
+
+    bathrooms_str = _extract_table_value(md, "Bathrooms")
+    bathrooms = int(bathrooms_str) if bathrooms_str and bathrooms_str.isdigit() else None
+
+    balconies_str = _extract_table_value(md, "Balconies")
+    balconies = int(balconies_str) if balconies_str and balconies_str.isdigit() else None
+
+    security_str = _extract_table_value(md, "Gated Security")
+    gated_security = security_str.lower() == "yes" if security_str else None
+
+    desc_match = re.search(r"##\s*Description\s*\n([\s\S]+?)(?=\n##|\Z)", md)
+    description = desc_match.group(1).strip() if desc_match else ""
+
+    return ListingDetail(
+        property_id=property_id,
+        furnishing=furnishing,
+        floor=floor,
+        power_backup=power_backup,
+        facing=facing,
+        bathrooms=bathrooms,
+        balconies=balconies,
+        parking=parking,
+        building_age=building_age,
+        preferred_tenant=preferred_tenant,
+        water_supply=water_supply,
+        gated_security=gated_security,
+        description=description,
+    )
+
+
+def run_scrape(ctx: RunContext) -> Path:
+    config = ctx.config
+    dedup = Dedup()
+    all_summaries: list[ListingSummary] = []
+    seen_ids: set[str] = set()
+
+    for locality in config.target_localities:
         print(f"Scraping {locality}...")
         try:
             md = scrape_seo_page(locality)
             listings = parse_listings_from_markdown(md, locality)
-            for l in listings:
-                if l.url not in seen_urls:
-                    seen_urls.add(l.url)
-                    all_listings.append(l)
-            print(f"  Found {len(listings)} listings ({len(seen_urls)} unique total)")
-            time.sleep(2)  # rate limiting courtesy
+            for ls in listings:
+                if ls.property_id in seen_ids or dedup.is_seen(ls.property_id):
+                    continue
+                if ls.rent > config.max_rent:
+                    continue
+                seen_ids.add(ls.property_id)
+                all_summaries.append(ls)
+            print(f"  {len(listings)} found, {len(seen_ids)} unique passing filters")
+            time.sleep(2)
         except Exception as e:
-            print(f"  Error scraping {locality}: {e}")
+            print(f"  Error: {e}")
 
-    return all_listings
+    results = []
+    for i, summary in enumerate(all_summaries):
+        print(f"[{i + 1}/{len(all_summaries)}] Detail: {summary.title[:50]}...")
+        try:
+            md = scrape_detail_page(summary.detail_url)
+            detail = parse_detail_from_markdown(md, summary.property_id)
+            dedup.mark_seen(summary.property_id)
+            results.append({"summary": summary.model_dump(), "detail": detail.model_dump()})
+            time.sleep(2)
+        except Exception as e:
+            print(f"  Detail scrape failed: {e}")
+            results.append({"summary": summary.model_dump(), "detail": None})
 
-
-def save_raw(listings: list[ListingSummary], tag: str = "") -> Path:
-    """Save raw listings to timestamped JSON file."""
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{date.today().isoformat()}{'-' + tag if tag else ''}.json"
-    path = RAW_DIR / filename
-    path.write_text(json.dumps([l.model_dump() for l in listings], indent=2))
-    print(f"Saved {len(listings)} listings to {path}")
-    return path
-
-
-def run():
-    """Full scrape pipeline."""
-    listings = scrape_all_localities()
-    if listings:
-        return save_raw(listings)
-    print("No listings found.")
-    return None
+    out_path = ctx.path("raw.json")
+    out_path.write_text(json.dumps(results, indent=2))
+    print(f"Saved {len(results)} listings to {out_path}")
+    return out_path
