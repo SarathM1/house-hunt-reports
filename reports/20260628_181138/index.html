@@ -61,10 +61,18 @@
 
   .sort-active { background: #4ecdc4 !important; color: #fff !important; border-color: #4ecdc4 !important; }
 
+  .filter-toggle { display: none; }
+
   @media (max-width: 600px) {
     .top-bar { padding: 12px 16px; }
     .top-bar h1 { font-size: 16px; }
-    .controls { padding: 10px 16px; gap: 6px; flex-direction: column; align-items: stretch; }
+    .filter-toggle { display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 10px 16px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 100; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .filter-toggle .ft-label { font-size: 13px; font-weight: 600; color: #555; }
+    .filter-toggle .ft-count { font-size: 13px; color: #888; }
+    .filter-toggle .ft-arrow { font-size: 12px; color: #888; transition: transform 0.2s; }
+    .filter-toggle.open .ft-arrow { transform: rotate(180deg); }
+    .controls { padding: 10px 16px; gap: 6px; flex-direction: column; align-items: stretch; position: sticky; top: 42px; max-height: 0; overflow: hidden; padding: 0 16px; border-bottom: none; transition: max-height 0.25s ease, padding 0.25s ease; }
+    .controls.open { max-height: 500px; padding: 10px 16px; border-bottom: 1px solid #e0e0e0; }
     .control-group { width: 100%; }
     .control-group input[type=range] { flex: 1; width: auto; }
     .toggle { justify-content: flex-start; }
@@ -91,6 +99,11 @@
   </div>
 </div>
 
+<div class="filter-toggle" id="filter-toggle" onclick="this.classList.toggle('open');document.getElementById('controls').classList.toggle('open')">
+  <span class="ft-label">Filters</span>
+  <span class="ft-count" id="ft-count"></span>
+  <span class="ft-arrow">&#9660;</span>
+</div>
 <div class="controls" id="controls">
   <div class="control-group">
     <label>Max Rent</label>
@@ -236,7 +249,10 @@ function render() {
   filtered.sort(sorters[sortBy] || sorters.score);
 
   document.getElementById('cards').innerHTML = filtered.map((e, i) => makeCard(e, i + 1)).join('');
-  document.getElementById('result-count').textContent = `${filtered.length} / ${DATA.length} listings`;
+  const countText = `${filtered.length} / ${DATA.length} listings`;
+  document.getElementById('result-count').textContent = countText;
+  const ftCount = document.getElementById('ft-count');
+  if (ftCount) ftCount.textContent = countText;
 }
 
 document.getElementById('controls').addEventListener('input', render);
