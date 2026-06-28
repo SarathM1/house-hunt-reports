@@ -1,123 +1,149 @@
-"""LLM-as-a-Judge scoring for qualified listings."""
 import json
-from datetime import date
 from pathlib import Path
 
 import anthropic
 
-from .config import SCORED_DIR, MIN_SCORE_FOR_REPORT
-from .models import ListingDetail, ScoredListing
+from .config import RunContext
+from .db import Dedup
+from .models import ScoredListing
 
-JUDGE_PROMPT = """You are evaluating a rental apartment listing for a hybrid worker who needs:
-- 100% power backup (HARD REQUIREMENT - generator, not just inverter)
-- Peaceful, quiet environment away from road noise
-- Good building maintenance and management
-- Suitable for remote work (stable internet likely, quiet during work hours)
+JUDGE_TEMPLATE = """You are evaluating a rental apartment listing for a hybrid worker near Prestige Tech Park, Bangalore.
+The tenant works remotely ~22 days/month from home, commutes to office only ~8 days/month.
 
-Rate this listing from 0-100. Deduct heavily for:
-- No mention of power backup or only inverter (-40 points)
-- Near highway/main road noise indicators (-20 points)
-- Poor maintenance indicators (-15 points)
-- Broker listing vs owner listing (-10 points)
-
-Evaluate this listing:
-
+LISTING:
 Title: {title}
 Address: {address}
-Rent: ₹{rent} + ₹{maintenance} maintenance
-Deposit: ₹{deposit}
-Area: {sqft} sqft
-Furnishing: {furnishing}
-Floor: {floor}
-Building Age: {building_age}
+Rent: ₹{rent:,}/month | Area: {sqft} sqft
+Furnishing: {furnishing} | Floor: {floor}
+Power Backup: {power_backup}
 Water Supply: {water_supply}
 Gated Security: {gated_security}
-Power Backup: {power_backup}
-Parking: {parking}
+Walking to PTP: {walk_minutes:.1f} minutes
+Distance from ORR: {orr_distance_m:.0f} meters
 Description: {description}
 
-Walk to Prestige Tech Park: {walk_minutes:.1f} minutes
-Distance from Outer Ring Road: {orr_distance:.0f} meters
+HARD REQUIREMENT:
+100% power backup (full generator covering entire apartment) is mandatory.
+If power backup is missing, unknown, partial, or inverter-only → disqualify immediately.
+
+SCORING CRITERIA (rate 0-100 total):
+- Power backup quality & coverage: {w_power_backup} points — Generator vs inverter, full vs partial, explicit mention
+- Noise insulation / peaceful environment: {w_noise} points — Description signals, floor level, facing away from road
+- Internet/connectivity infrastructure: {w_internet} points — Fiber-ready, broadband mentions, ACT/Airtel availability
+- Natural light, ventilation, floor level: {w_light_ventilation} points — Facing, balconies, mid-floor (2-4) preference
+- Water supply reliability: {w_water} points — Corporation + borewell + sump > borewell-only
+- Building maintenance & security: {w_maintenance} points — Gated community, managed maintenance, security staff
+- WFH livability (space, furnishing): {w_wfh_livability} points — Room for desk, semi/fully furnished, quiet layout
+- Value for money: {w_value} points — Rent vs sqft vs amenities ratio
 
 Respond with ONLY valid JSON:
-{{"score": <0-100>, "reasoning": "<2-3 sentence explanation>"}}"""
+{{"score": <0-100>, "reasoning": "<2-3 sentences>", "disqualified": <true|false>, "disqualify_reason": "<reason or null>"}}"""
 
 
-def score_listing(listing: ListingDetail) -> ScoredListing:
-    """Score a single listing using Claude as judge."""
-    client = anthropic.Anthropic()
-
-    prompt = JUDGE_PROMPT.format(
-        title=listing.title,
-        address=listing.address,
-        rent=listing.rent,
-        maintenance=listing.maintenance,
-        deposit=listing.deposit,
-        sqft=listing.sqft,
-        furnishing=listing.furnishing or "Unknown",
-        floor=listing.floor or "Unknown",
-        building_age=listing.building_age or "Unknown",
-        water_supply=listing.water_supply or "Unknown",
-        gated_security=listing.gated_security or "Unknown",
-        power_backup=listing.power_backup or "Unknown",
-        parking=listing.parking or "Unknown",
-        description=listing.description[:500] or "No description",
-        walk_minutes=listing.walk_minutes or 0,
-        orr_distance=listing.orr_distance_meters or 0,
+def build_judge_prompt(
+    summary: dict,
+    detail: dict,
+    walk_minutes: float,
+    orr_distance_m: float,
+    llm_weights: dict[str, int],
+) -> str:
+    return JUDGE_TEMPLATE.format(
+        title=summary.get("title", "Unknown"),
+        address=summary.get("address", "Unknown"),
+        rent=summary.get("rent", 0),
+        sqft=summary.get("sqft", 0),
+        furnishing=detail.get("furnishing") or "Unknown",
+        floor=detail.get("floor") or "Unknown",
+        power_backup=detail.get("power_backup") or "Unknown",
+        water_supply=detail.get("water_supply") or "Unknown",
+        gated_security=detail.get("gated_security", "Unknown"),
+        walk_minutes=walk_minutes,
+        orr_distance_m=orr_distance_m,
+        description=(detail.get("description") or "No description")[:500],
+        w_power_backup=llm_weights.get("power_backup", 20),
+        w_noise=llm_weights.get("noise", 20),
+        w_internet=llm_weights.get("internet", 15),
+        w_light_ventilation=llm_weights.get("light_ventilation", 10),
+        w_water=llm_weights.get("water", 10),
+        w_maintenance=llm_weights.get("maintenance", 10),
+        w_wfh_livability=llm_weights.get("wfh_livability", 10),
+        w_value=llm_weights.get("value", 5),
     )
 
+
+def score_listing(
+    summary: dict,
+    detail: dict,
+    spatial: dict,
+    llm_weights: dict[str, int],
+) -> dict:
+    client = anthropic.Anthropic()
+    prompt = build_judge_prompt(
+        summary=summary,
+        detail=detail or {},
+        walk_minutes=spatial["walk_minutes"],
+        orr_distance_m=spatial["orr_distance_m"],
+        llm_weights=llm_weights,
+    )
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=300,
+        max_tokens=400,
         messages=[{"role": "user", "content": prompt}],
     )
-
     text = response.content[0].text.strip()
-    # ponytail: naive JSON parse — add retry/fallback if Claude returns non-JSON
-    result = json.loads(text)
-
-    orr_dist = listing.orr_distance_meters or 0
-    peace_score = min(10, orr_dist / 100)  # 0-10 scale, 1000m+ = max
-
-    return ScoredListing(
-        **listing.model_dump(),
-        peace_score=peace_score,
-        llm_score=result["score"],
-        llm_reasoning=result["reasoning"],
-        total_score=result["score"] * 0.7 + peace_score * 3,  # weighted blend
-    )
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    return json.loads(text)
 
 
-def score_all(listings: list[ListingDetail]) -> list[ScoredListing]:
-    """Score all listings."""
+def run_score(ctx: RunContext) -> Path:
+    config = ctx.config
+    filtered_path = ctx.path("filtered.json")
+    entries = json.loads(filtered_path.read_text())
+    dedup = Dedup()
     scored = []
-    for i, listing in enumerate(listings):
-        print(f"[{i+1}/{len(listings)}] Scoring: {listing.title[:60]}...")
+
+    for i, entry in enumerate(entries):
+        summary = entry["summary"]
+        detail = entry.get("detail") or {}
+        title = summary["title"][:50]
+        print(f"[{i + 1}/{len(entries)}] Scoring: {title}...")
+
         try:
-            s = score_listing(listing)
-            scored.append(s)
-            print(f"  Score: {s.total_score:.1f} (LLM: {s.llm_score}, Peace: {s.peace_score:.1f})")
+            result = score_listing(
+                summary=summary,
+                detail=detail,
+                spatial={"walk_minutes": entry["walk_minutes"], "orr_distance_m": entry["orr_distance_m"]},
+                llm_weights=config.llm_weights,
+            )
+
+            peace = entry["peace_score"]
+            llm = result["score"]
+            w = config.score_weights
+            final = w["peace"] * peace + w["llm"] * llm
+
+            item = ScoredListing(
+                summary=summary,
+                detail=detail,
+                lat=entry["lat"],
+                lon=entry["lon"],
+                walk_minutes=entry["walk_minutes"],
+                orr_distance_m=entry["orr_distance_m"],
+                peace_score=peace,
+                llm_score=llm,
+                llm_reasoning=result["reasoning"],
+                final_score=round(final, 1),
+                disqualified=result.get("disqualified", False),
+                disqualify_reason=result.get("disqualify_reason"),
+            )
+            scored.append(item.model_dump())
+            dedup.update_score(summary["property_id"], final, result.get("disqualified", False))
+            status = "DISQ" if item.disqualified else "OK"
+            print(f"  [{status}] Score: {final:.1f} (LLM:{llm} Peace:{peace:.0f})")
         except Exception as e:
-            print(f"  Error scoring: {e}")
-    return scored
+            print(f"  Error: {e}")
 
-
-def save_scored(listings: list[ScoredListing], tag: str = "") -> Path:
-    """Save scored listings to timestamped JSON."""
-    SCORED_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{date.today().isoformat()}{'-' + tag if tag else ''}.json"
-    path = SCORED_DIR / filename
-    path.write_text(json.dumps([l.model_dump() for l in listings], indent=2))
-    print(f"Saved {len(listings)} scored listings to {path}")
-    return path
-
-
-def run(filtered_path: Path | str) -> Path | None:
-    """Load filtered listings, score, save."""
-    raw = json.loads(Path(filtered_path).read_text())
-    listings = [ListingDetail(**item) for item in raw]
-    scored = score_all(listings)
-    if scored:
-        return save_scored(scored)
-    print("No listings scored.")
-    return None
+    out_path = ctx.path("scored.json")
+    out_path.write_text(json.dumps(scored, indent=2))
+    print(f"Saved {len(scored)} scored listings to {out_path}")
+    return out_path
