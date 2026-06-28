@@ -8,6 +8,23 @@ from .models import ListingDetail
 
 MAX_CONCURRENT = 3
 
+COMPLETENESS_FIELDS = [
+    "furnishing", "floor", "power_backup", "facing", "bathrooms",
+    "balconies", "parking", "building_age", "preferred_tenant",
+    "water_supply", "gated_security", "description",
+]
+
+CRITICAL_FIELDS = ["power_backup", "water_supply", "furnishing"]
+
+
+def compute_data_completeness(detail: dict) -> float:
+    filled = sum(1 for f in COMPLETENESS_FIELDS if detail.get(f) not in (None, "", 0))
+    return round(filled / len(COMPLETENESS_FIELDS), 2)
+
+
+def needs_retry(detail: dict) -> bool:
+    return any(detail.get(f) in (None, "") for f in CRITICAL_FIELDS)
+
 
 def _log(msg: str) -> None:
     print(msg, flush=True)
@@ -100,6 +117,14 @@ async def _scrape_one(context, url: str, property_id: str, idx: int, total: int,
             await page.wait_for_timeout(3000)
             text = await page.inner_text("body")
             detail = _parse_detail_from_text(text, property_id)
+
+            if needs_retry(detail.model_dump()):
+                _log(f"  ↻ {property_id}: missing critical fields, retrying...")
+                await page.reload(wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_timeout(4000)
+                text = await page.inner_text("body")
+                detail = _parse_detail_from_text(text, property_id)
+
             images = await _scrape_images(page) if scrape_images else []
             _log(f"  ✓ {property_id}: furnishing={detail.furnishing}, power={detail.power_backup}, floor={detail.floor}, images={len(images)}")
             return property_id, detail, images
@@ -147,9 +172,13 @@ def scrape_details_playwright(entries: list[dict], with_images: bool = False) ->
         pid = entry["summary"]["property_id"]
         if pid in results:
             detail, images = results[pid]
-            entry["detail"] = detail.model_dump()
+            detail_dict = detail.model_dump()
+            entry["detail"] = detail_dict
+            entry["data_completeness"] = compute_data_completeness(detail_dict)
             if images:
                 entry["summary"]["image_urls"] = images
+        else:
+            entry["data_completeness"] = compute_data_completeness(entry.get("detail") or {})
         updated.append(entry)
 
     _log(f"  Got details for {len(results)}/{len(urls_needed)} listings")
