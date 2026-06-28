@@ -23,7 +23,7 @@ def generate_report(ctx: RunContext) -> Path:
     threshold = config.score_threshold
     above = sum(1 for e in qualified if e["final_score"] >= threshold)
 
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=True)
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=False)
     template = env.get_template(TEMPLATE_FILE)
     html = template.render(
         run_id=ctx.run_id,
@@ -34,6 +34,7 @@ def generate_report(ctx: RunContext) -> Path:
         above_threshold=above,
         threshold=threshold,
         entries=sorted_entries,
+        entries_json=json.dumps(sorted_entries),
     )
 
     # HTML for humans

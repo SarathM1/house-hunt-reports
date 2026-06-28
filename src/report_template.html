@@ -6,128 +6,210 @@
 <title>House Hunt Report — {{ run_id }}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
-  .header { background: #1a1a2e; color: #fff; padding: 24px 32px; border-radius: 12px; margin-bottom: 24px; }
-  .header h1 { font-size: 24px; margin-bottom: 8px; }
-  .header .stats { display: flex; gap: 24px; font-size: 14px; color: #aaa; }
-  .header .stats span { color: #4ecdc4; font-weight: 600; }
-  .cards { display: grid; gap: 16px; }
-  .card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 5px solid #ddd; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+
+  .top-bar { background: #1a1a2e; color: #fff; padding: 20px 32px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .top-bar h1 { font-size: 20px; margin-bottom: 4px; }
+  .top-bar .meta { font-size: 13px; color: #aaa; }
+  .top-bar .meta span { color: #4ecdc4; font-weight: 600; }
+
+  .controls { background: #fff; padding: 16px 32px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 68px; z-index: 99; display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .control-group { display: flex; flex-direction: column; gap: 2px; }
+  .control-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
+  .control-group select, .control-group input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: #fff; }
+  .control-group input[type=range] { width: 140px; }
+  .range-val { font-size: 12px; color: #555; font-weight: 500; min-width: 50px; }
+  .toggle { display: flex; gap: 6px; align-items: center; }
+  .toggle input[type=checkbox] { width: 16px; height: 16px; }
+  .toggle label { font-size: 13px; cursor: pointer; }
+  .result-count { font-size: 13px; color: #888; margin-left: auto; padding: 6px 0; }
+
+  .container { padding: 20px 32px; }
+  .cards { display: grid; gap: 12px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #ddd; transition: opacity 0.2s; }
   .card.qualified { border-left-color: #4ecdc4; }
   .card.act-now { border-left-color: #ff6b6b; }
-  .card.disqualified { border-left-color: #ccc; opacity: 0.6; }
-  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-  .card-header h2 { font-size: 16px; flex: 1; }
-  .card-header h2 a { color: #1a1a2e; text-decoration: none; }
-  .card-header h2 a:hover { color: #4ecdc4; text-decoration: underline; }
-  .rank { font-size: 14px; color: #888; min-width: 36px; }
-  .score-badge { background: #1a1a2e; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; margin-left: 12px; }
-  .score-badge.high { background: #ff6b6b; }
-  .score-badge.disq { background: #999; }
-  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-left: 8px; }
+  .card.disqualified { border-left-color: #ccc; opacity: 0.5; }
+  .card.hidden { display: none; }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .card-top h2 { font-size: 15px; flex: 1; line-height: 1.3; }
+  .card-top h2 a { color: #1a1a2e; text-decoration: none; }
+  .card-top h2 a:hover { color: #4ecdc4; }
+  .rank { color: #aaa; font-size: 13px; margin-right: 6px; }
+  .score { background: #1a1a2e; color: #fff; padding: 3px 10px; border-radius: 16px; font-size: 13px; font-weight: 600; white-space: nowrap; margin-left: 10px; flex-shrink: 0; }
+  .score.high { background: #ff6b6b; }
+  .score.disq { background: #999; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 6px; vertical-align: middle; }
   .tag.act { background: #ffe0e0; color: #d32f2f; }
   .tag.disq { background: #eee; color: #888; }
-  .details { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 16px; margin-bottom: 12px; }
-  .detail-item { font-size: 13px; }
-  .detail-item .label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .detail-item .value { font-weight: 500; }
-  .reasoning { font-size: 13px; color: #555; line-height: 1.5; padding: 10px 12px; background: #f9f9f9; border-radius: 6px; margin-top: 8px; }
-  .disq-reason { color: #d32f2f; font-weight: 500; font-size: 13px; margin-bottom: 8px; }
-  .section-divider { text-align: center; color: #aaa; font-size: 13px; padding: 16px 0; text-transform: uppercase; letter-spacing: 1px; }
+
+  .props { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 8px; }
+  .prop { font-size: 12px; }
+  .prop .k { color: #999; }
+  .prop .v { font-weight: 500; }
+
+  .reasoning { font-size: 12px; color: #666; line-height: 1.4; padding: 8px 10px; background: #f9f9f9; border-radius: 5px; margin-top: 6px; }
+  .disq-reason { color: #d32f2f; font-weight: 500; font-size: 12px; margin-bottom: 6px; }
+
+  .sort-active { background: #4ecdc4 !important; color: #fff !important; border-color: #4ecdc4 !important; }
 </style>
 </head>
 <body>
-<div class="header">
+
+<div class="top-bar">
   <h1>House Hunt Report</h1>
-  <div class="stats">
-    Run: <span>{{ run_id }}</span>
-    Config: <span>{{ config_name }}</span>
+  <div class="meta">
+    Run: <span>{{ run_id }}</span> &middot;
+    Config: <span>{{ config_name }}</span> &middot;
     Total: <span>{{ total }}</span>
-    Qualified: <span>{{ qualified }}</span>
-    Above {{ threshold }}: <span>{{ above_threshold }}</span>
   </div>
 </div>
 
-<div class="cards">
-{% set ns = namespace(shown_disq_header=false) %}
-{% for e in entries %}
-{% set s = e.summary %}
-{% set d = e.detail %}
-{% set is_disq = e.disqualified %}
-{% set is_act = e.final_score >= threshold and not is_disq %}
-
-{% if is_disq and not ns.shown_disq_header %}
-{% set ns.shown_disq_header = true %}
-<div class="section-divider">— Disqualified ({{ disqualified_count }}) —</div>
-{% endif %}
-
-<div class="card {{ 'act-now' if is_act else ('disqualified' if is_disq else 'qualified') }}">
-  <div class="card-header">
-    <h2>
-      <span class="rank">#{{ loop.index }}</span>
-      <a href="{{ s.detail_url }}" target="_blank">{{ s.title }}</a>
-      {% if is_act %}<span class="tag act">Act Now</span>{% endif %}
-      {% if is_disq %}<span class="tag disq">Disqualified</span>{% endif %}
-    </h2>
-    <span class="score-badge {{ 'high' if is_act else ('disq' if is_disq else '') }}">{{ e.final_score }}</span>
-  </div>
-
-  {% if is_disq %}
-  <div class="disq-reason">{{ e.disqualify_reason }}</div>
-  {% endif %}
-
-  <div class="details">
-    <div class="detail-item">
-      <div class="label">Rent</div>
-      <div class="value">₹{{ "{:,}".format(s.rent) }}{% if s.maintenance %} + ₹{{ "{:,}".format(s.maintenance) }}{% endif %}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Deposit</div>
-      <div class="value">₹{{ "{:,}".format(s.deposit) }}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Area</div>
-      <div class="value">{{ s.sqft }} sqft</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Travel to PTP</div>
-      <div class="value">{{ e.walk_minutes }} min</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">ORR Distance</div>
-      <div class="value">{{ e.orr_distance_m | int }}m</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Furnishing</div>
-      <div class="value">{{ d.furnishing or 'Unknown' }}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Floor</div>
-      <div class="value">{{ d.floor or 'Unknown' }}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Power Backup</div>
-      <div class="value">{{ d.power_backup or 'Unknown' }}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Water Supply</div>
-      <div class="value">{{ d.water_supply or 'Unknown' }}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Gated Security</div>
-      <div class="value">{{ 'Yes' if d.gated_security else ('No' if d.gated_security == false else 'Unknown') }}</div>
-    </div>
-    <div class="detail-item">
-      <div class="label">Scores</div>
-      <div class="value">LLM: {{ e.llm_score }} | Peace: {{ e.peace_score }}</div>
+<div class="controls" id="controls">
+  <div class="control-group">
+    <label>Max Rent</label>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="range" id="f-rent" min="5000" max="100000" step="1000" value="100000">
+      <span class="range-val" id="f-rent-val">₹1L</span>
     </div>
   </div>
+  <div class="control-group">
+    <label>Max Travel (min)</label>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="range" id="f-travel" min="5" max="120" step="5" value="120">
+      <span class="range-val" id="f-travel-val">120</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Min Area (sqft)</label>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="range" id="f-sqft" min="0" max="2000" step="50" value="0">
+      <span class="range-val" id="f-sqft-val">Any</span>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Furnishing</label>
+    <select id="f-furn">
+      <option value="all">All</option>
+      <option value="Full">Full</option>
+      <option value="Semi">Semi</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>Sort By</label>
+    <select id="f-sort">
+      <option value="score">Score</option>
+      <option value="rent">Rent (low)</option>
+      <option value="travel">Travel (short)</option>
+      <option value="sqft">Area (big)</option>
+      <option value="value">₹/sqft (low)</option>
+    </select>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-power" checked>
+    <label for="f-power">Power backup only</label>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-gated">
+    <label for="f-gated">Gated only</label>
+  </div>
+  <div class="control-group toggle">
+    <input type="checkbox" id="f-hide-disq" checked>
+    <label for="f-hide-disq">Hide disqualified</label>
+  </div>
+  <div class="result-count" id="result-count"></div>
+</div>
 
-  {% if e.llm_reasoning %}
-  <div class="reasoning">{{ e.llm_reasoning }}</div>
-  {% endif %}
+<div class="container">
+  <div class="cards" id="cards"></div>
 </div>
-{% endfor %}
-</div>
+
+<script>
+const DATA = {{ entries_json }};
+const THRESHOLD = {{ threshold }};
+
+function makeCard(e, rank) {
+  const s = e.summary, d = e.detail || {};
+  const isDisq = e.disqualified;
+  const isAct = e.final_score >= THRESHOLD && !isDisq;
+  const cls = isAct ? 'act-now' : (isDisq ? 'disqualified' : 'qualified');
+  const tagHtml = isAct ? '<span class="tag act">Act Now</span>' : (isDisq ? '<span class="tag disq">DQ</span>' : '');
+  const scoreClass = isAct ? 'high' : (isDisq ? 'disq' : '');
+  const totalRent = s.rent + (s.maintenance || 0);
+
+  return `<div class="card ${cls}" data-rent="${totalRent}" data-travel="${e.walk_minutes}" data-sqft="${s.sqft}" data-score="${e.final_score}" data-furn="${d.furnishing || ''}" data-power="${d.power_backup || ''}" data-gated="${d.gated_security}" data-disq="${isDisq}" data-value="${s.sqft > 0 ? (totalRent/s.sqft).toFixed(1) : 999}">
+    <div class="card-top">
+      <h2><span class="rank">#${rank}</span><a href="${s.detail_url}" target="_blank">${s.title}</a>${tagHtml}</h2>
+      <span class="score ${scoreClass}">${e.final_score}</span>
+    </div>
+    ${isDisq ? `<div class="disq-reason">${e.disqualify_reason}</div>` : ''}
+    <div class="props">
+      <div class="prop"><span class="k">Rent </span><span class="v">₹${totalRent.toLocaleString('en-IN')}</span></div>
+      <div class="prop"><span class="k">Deposit </span><span class="v">₹${s.deposit.toLocaleString('en-IN')}</span></div>
+      <div class="prop"><span class="k">Area </span><span class="v">${s.sqft} sqft</span></div>
+      <div class="prop"><span class="k">Travel </span><span class="v">${e.walk_minutes} min</span></div>
+      <div class="prop"><span class="k">ORR </span><span class="v">${Math.round(e.orr_distance_m)}m</span></div>
+      <div class="prop"><span class="k">Furnishing </span><span class="v">${d.furnishing || '?'}</span></div>
+      <div class="prop"><span class="k">Floor </span><span class="v">${d.floor || '?'}</span></div>
+      <div class="prop"><span class="k">Power </span><span class="v">${d.power_backup || '?'}</span></div>
+      <div class="prop"><span class="k">Water </span><span class="v">${d.water_supply || '?'}</span></div>
+      <div class="prop"><span class="k">Security </span><span class="v">${d.gated_security === true ? 'Yes' : (d.gated_security === false ? 'No' : '?')}</span></div>
+      <div class="prop"><span class="k">₹/sqft </span><span class="v">${s.sqft > 0 ? (totalRent/s.sqft).toFixed(0) : '?'}</span></div>
+      <div class="prop"><span class="k">LLM </span><span class="v">${e.llm_score}</span></div>
+      <div class="prop"><span class="k">Peace </span><span class="v">${e.peace_score}</span></div>
+    </div>
+    ${e.llm_reasoning ? `<div class="reasoning">${e.llm_reasoning}</div>` : ''}
+  </div>`;
+}
+
+function render() {
+  const maxRent = +document.getElementById('f-rent').value;
+  const maxTravel = +document.getElementById('f-travel').value;
+  const minSqft = +document.getElementById('f-sqft').value;
+  const furn = document.getElementById('f-furn').value;
+  const powerOnly = document.getElementById('f-power').checked;
+  const gatedOnly = document.getElementById('f-gated').checked;
+  const hideDisq = document.getElementById('f-hide-disq').checked;
+  const sortBy = document.getElementById('f-sort').value;
+
+  document.getElementById('f-rent-val').textContent = maxRent >= 100000 ? '₹1L+' : `₹${(maxRent/1000).toFixed(0)}K`;
+  document.getElementById('f-travel-val').textContent = maxTravel;
+  document.getElementById('f-sqft-val').textContent = minSqft === 0 ? 'Any' : minSqft;
+
+  let filtered = DATA.filter(e => {
+    const s = e.summary, d = e.detail || {};
+    const totalRent = s.rent + (s.maintenance || 0);
+    if (hideDisq && e.disqualified) return false;
+    if (totalRent > maxRent && maxRent < 100000) return false;
+    if (e.walk_minutes > maxTravel) return false;
+    if (s.sqft < minSqft) return false;
+    if (furn !== 'all' && (d.furnishing || '') !== furn) return false;
+    if (powerOnly && !d.power_backup) return false;
+    if (gatedOnly && d.gated_security !== true) return false;
+    return true;
+  });
+
+  const sorters = {
+    score: (a, b) => b.final_score - a.final_score,
+    rent: (a, b) => (a.summary.rent + (a.summary.maintenance||0)) - (b.summary.rent + (b.summary.maintenance||0)),
+    travel: (a, b) => a.walk_minutes - b.walk_minutes,
+    sqft: (a, b) => b.summary.sqft - a.summary.sqft,
+    value: (a, b) => {
+      const va = a.summary.sqft > 0 ? (a.summary.rent + (a.summary.maintenance||0))/a.summary.sqft : 999;
+      const vb = b.summary.sqft > 0 ? (b.summary.rent + (b.summary.maintenance||0))/b.summary.sqft : 999;
+      return va - vb;
+    }
+  };
+  filtered.sort(sorters[sortBy] || sorters.score);
+
+  document.getElementById('cards').innerHTML = filtered.map((e, i) => makeCard(e, i + 1)).join('');
+  document.getElementById('result-count').textContent = `${filtered.length} / ${DATA.length} listings`;
+}
+
+document.getElementById('controls').addEventListener('input', render);
+document.getElementById('controls').addEventListener('change', render);
+render();
+</script>
 </body>
 </html>
