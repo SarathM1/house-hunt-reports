@@ -49,8 +49,14 @@
   .prop .k { color: #999; }
   .prop .v { font-weight: 500; }
 
+  .images { display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; padding-bottom: 4px; }
+  .images img { height: 120px; border-radius: 6px; object-fit: cover; cursor: pointer; flex-shrink: 0; }
+  .images img:hover { opacity: 0.8; }
   .reasoning { font-size: 12px; color: #666; line-height: 1.4; padding: 8px 10px; background: #f9f9f9; border-radius: 5px; margin-top: 6px; }
   .disq-reason { color: #d32f2f; font-weight: 500; font-size: 12px; margin-bottom: 6px; }
+  .lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; cursor: pointer; }
+  .lightbox.active { display: flex; }
+  .lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px; }
 
   .sort-active { background: #4ecdc4 !important; color: #fff !important; border-color: #4ecdc4 !important; }
 </style>
@@ -125,6 +131,10 @@
   <div class="cards" id="cards"></div>
 </div>
 
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+  <img id="lightbox-img" src="">
+</div>
+
 <script>
 const DATA = {{ entries_json }};
 const THRESHOLD = {{ threshold }};
@@ -159,6 +169,7 @@ function makeCard(e, rank) {
       <div class="prop"><span class="k">LLM </span><span class="v">${e.llm_score}</span></div>
       <div class="prop"><span class="k">Peace </span><span class="v">${e.peace_score}</span></div>
     </div>
+    ${s.image_urls && s.image_urls.length > 0 && s.image_urls[0].includes('images.nobroker.in') ? `<div class="images">${s.image_urls.map(u => `<img src="${u}" loading="lazy" onclick="event.stopPropagation();document.getElementById('lightbox-img').src='${u}';document.getElementById('lightbox').classList.add('active')">`).join('')}</div>` : ''}
     ${e.llm_reasoning ? `<div class="reasoning">${e.llm_reasoning}</div>` : ''}
   </div>`;
 }
